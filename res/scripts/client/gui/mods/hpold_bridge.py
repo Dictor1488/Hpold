@@ -12,11 +12,12 @@ from gui.Scaleform.framework import g_entitiesFactories, ViewSettings, ScopeTemp
 from gui.Scaleform.framework.entities.BaseDAAPIComponent import BaseDAAPIComponent
 from gui.Scaleform.framework.managers.loaders import SFViewLoadParams
 from gui.Scaleform.framework.entities.View import View
+from gui.Scaleform.framework.entities.DisposableEntity import EntityState
 from gui.shared.personality import ServicesLocator
 from skeletons.gui.app_loader import GuiGlobalSpaceID
 from frameworks.wulf import WindowLayer
 
-VIEW_INJECTOR = 'HpoldPanelInjector'
+VIEW_INJECTOR = 'PlayerPanelsAPIInjector'
 VIEW_COMPONENT = 'PlayerPanelsUI'
 SWF_NAME = 'playersPanelAPI_modsCore.swf'
 PANEL_DEFAULTS = {
@@ -65,6 +66,10 @@ class PlayerPanelsUI(BaseDAAPIComponent):
         events.update -= self.as_updateS
         events.delete -= self.as_deleteS
         super(PlayerPanelsUI, self)._dispose()
+
+    def destroy(self):
+        if self.getState() == EntityState.CREATED:
+            super(PlayerPanelsUI, self).destroy()
 
     def as_createS(self, name, kind, definition):
         if self._isDAAPIInited():
