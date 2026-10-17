@@ -1,209 +1,243 @@
 # -*- coding: utf-8 -*-
-"""Hpold - independent WoT HP panels data source (Python 2.7).
-No dependencies on oldskool/modsCore. Experimental until battle testing.
+"""Standalone port of the recovered OldSkool PlayersPanelHP battle logic.
+
+Uses native PlayersPanel.updateVehicleHealth (not arena polling) and original
+HP templates. No imports of gui.oldskool/modsCore.
+This module still needs a working Hpold UI adapter for visible output.
+Python 2.7 / WoT client; client 2.4.1 integration is pending battle testing.
 """
 import json
+import math
 import os
 import traceback
 
 try:
     import BigWorld
     import Keys
+    import game
+    from Avatar import PlayerAvatar
+    from gui.Scaleform.daapi.view.battle.classic.players_panel import PlayersPanel
+    from gui.Scaleform.daapi.view.meta.PlayersPanelMeta import PlayersPanelMeta
+    from gui.battle_control import avatar_getter
+    from helpers import dependency
+    from skeletons.gui.battle_session import IBattleSessionProvider
+    from skeletons.account_helpers.settings_core import ISettingsCore
+    from account_helpers.settings_core.settings_constants import GRAPHICS
+    from constants import ARENA_GUI_TYPE
+    from gui.mods import hpold_bridge
+    IMPORTS_OK = True
 except ImportError:
-    BigWorld = None
-    Keys = None
+    IMPORTS_OK = False
 
-DEFAULTS = {
-    'enabled': True,
-    'switchModeHotKey': [88],
-    'displayState': 0,
-    'configVersion': 2,
-    'pollInterval': 0.2
-}
 CONFIG_PATH = os.path.join('mods', 'configs', 'hpold', 'config.json')
+DEFAULTS = {'enabled': True, 'displayState': 1, 'configVersion': 2,
+            'switchModeHotKey': [Keys.KEY_F12] if IMPORTS_OK else [88]}
 
 
 def log(message):
-    try:
-        print '[Hpold] %s' % message
-    except Exception:
-        pass
+    print '[Hpold] %s' % message
 
 
 def read_config():
-    data = dict(DEFAULTS)
+    result = dict(DEFAULTS)
     try:
         with open(CONFIG_PATH, 'rb') as stream:
-            value = json.load(stream)
-        if isinstance(value, dict):
-            for key in DEFAULTS:
-                if key in value:
-                    data[key] = value[key]
-    except (IOError, ValueError, TypeError):
+            parsed = json.load(stream)
+        if isinstance(parsed, dict):
+            result.update((key, parsed[key]) for key in DEFAULTS if key in parsed)
+    except (IOError, TypeError, ValueError):
         pass
-    return data
+    return result
 
 
-class HpoldController(object):
+def override(klass, method_name, callback):
+    """Safe native method wrapper; calls original exactly once."""
+    original = getattr(klass, method_name, None)
+    if original is None:
+        log('hook missing: %s.%s' % (klass.__name__, method_name))
+        return False
+    if getattr(original, '_hpold_hook', False):
+        return True
+    def wrapped(*args, **kwargs):
+        return callback(original, *args, **kwargs)
+    wrapped._hpold_hook = True
+    setattr(klass, method_name, wrapped)
+    return True
+
+
+class HPController(object):
     def __init__(self):
         self.config = read_config()
-        self.running = False
-        self.tick_id = None
-        self._snapshot = {}
-        self._mode = int(self.config.get('displayState', 0))
-        self._input_registered = False
-        self._bridge = None
-
-    def start(self):
-        if self.running or not self.config.get('enabled', True):
-            return
-        self.running = True
-        self._snapshot.clear()
-        self._register_input()
-        self._connect_bridge()
-        self._tick()
-        log('battle start')
-
-    def stop(self):
-        if not self.running:
-            return
-        self.running = False
-        if self.tick_id is not None:
-            try:
-                BigWorld.cancelCallback(self.tick_id)
-            except Exception:
-                pass
-            self.tick_id = None
-        self._unregister_input()
-        if self._bridge is not None:
-            self._bridge.close()
-            self._bridge = None
-        self._snapshot.clear()
-        log('battle stop')
-
-    def _register_input(self):
+        self.hp = {}
+        self.displayed = self.config.get('displayState', 1) == 0
+        self.only_on_key = not self.displayed
+        self.arena = None
+        self.bridge = hpold_bridge.Bridge()
+        self.enemy_image = 'hp_alive_r.png'
         try:
-            from gui import InputHandler
-            InputHandler.g_instance.onKeyDown += self._on_key_down
-            self._input_registered = True
-        except Exception:
-            log('key event registration unavailable')
-
-    def _unregister_input(self):
-        if not self._input_registered:
-            return
-        try:
-            from gui import InputHandler
-            InputHandler.g_instance.onKeyDown -= self._on_key_down
+            if dependency.instance(ISettingsCore).getSetting(GRAPHICS.COLOR_BLIND):
+                self.enemy_image = 'hp_alive_cb.png'
         except Exception:
             pass
-        self._input_registered = False
+        self.templates = {
+            '1text': {
+                'left': {'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'align': 'center', 'x': 100, 'y': 3},
+                'right': {'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'align': 'center', 'x': -160, 'y': 3}},
+            '2img': {
+                'left': {'text': "<img src='img://gui/hpbars/hp_alive_l.png' width='%(barWidth)d' height='14'>", 'width': 72, 'align': 'left', 'x': 85, 'y': 3},
+                'right': {'text': "<img src='img://gui/hpbars/" + self.enemy_image + "' width='%(barWidth)d' height='14'>", 'width': 72, 'align': 'left', 'x': -176, 'y': 3}},
+            '3bg': {
+                'left': {'text': "<img src='img://gui/hpbars/hp_bg.png' width='68' height='12'>", 'align': 'left', 'x': 86, 'y': 4},
+                'right': {'text': "<img src='img://gui/hpbars/hp_bg.png' width='68' height='12'>", 'align': 'left', 'x': -175, 'y': 4}}
+        }
 
-    def _on_key_down(self, event):
-        try:
-            key = getattr(event, 'key', None)
-            if key is None and hasattr(event, 'keyCode'):
-                key = event.keyCode
-            hotkey = self.config.get('switchModeHotKey', [88])
-            if key in hotkey and not getattr(event, 'isRepeat', False):
-                self._mode = (self._mode + 1) % 3
-                if self._bridge is not None:
-                    self._bridge.set_mode(self._mode)
-        except Exception:
-            log('key handler error: %s' % traceback.format_exc())
-
-    def _connect_bridge(self):
-        try:
-            from gui.mods import hpold_bridge
-            self._bridge = hpold_bridge.Bridge()
-            self._bridge.open()
-            self._bridge.set_mode(self._mode)
-        except Exception:
-            self._bridge = None
-            log('bridge unavailable: %s' % traceback.format_exc())
-
-    def _collect(self):
-        player = BigWorld.player()
-        arena = getattr(player, 'arena', None)
+    def special(self):
+        arena = avatar_getter.getArena()
         if arena is None:
-            return {}
-        out = {}
-        vehicles = getattr(arena, 'vehicles', {})
-        for vehicle_id, item in vehicles.iteritems():
-            if not isinstance(item, dict):
-                continue
-            max_hp = item.get('maxHealth') or item.get('maxHP') or 0
-            current = item.get('health')
-            alive = item.get('isAlive', True)
-            if current is None:
-                # Arena data alone may not provide current HP: do not fake it.
-                continue
-            if not max_hp:
-                continue
-            out[vehicle_id] = {
-                'vehicleID': vehicle_id,
-                'health': max(0, current),
-                'maxHealth': max_hp,
-                'alive': bool(alive),
-                'team': item.get('team', 0)
-            }
-        return out
+            return True
+        modes = ('EPIC_BATTLE', 'EVENT_BATTLES', 'HALLOWEEN',
+                 'EPIC_RANDOM', 'EPIC_RANDOM_TRAINING')
+        return arena.guiType in tuple(getattr(ARENA_GUI_TYPE, name)
+                                     for name in modes if hasattr(ARENA_GUI_TYPE, name))
 
-    def _tick(self):
-        self.tick_id = None
-        if not self.running:
+    def start_gui(self):
+        self.close_gui()
+        avatar = BigWorld.player()
+        self.arena = getattr(avatar, 'arena', None)
+        if self.arena is not None:
+            try:
+                self.arena.onVehicleKilled += self.on_killed
+            except Exception:
+                log('arena.onVehicleKilled subscription failed')
+        self.bridge.open(self.templates)
+        if self.displayed:
+            BigWorld.callback(1.0, self.refresh)
+
+    def close_gui(self):
+        if self.arena is not None:
+            try:
+                self.arena.onVehicleKilled -= self.on_killed
+            except Exception:
+                pass
+        self.arena = None
+        self.hp.clear()
+        self.bridge.close()
+
+    def on_killed(self, targetID, attackerID, equipmentID, reason, numVehiclesAffected):
+        if targetID in self.hp and not self.special():
+            self.hp[targetID]['current'] = 0
+            self.render(targetID)
+
+    def health_changed(self, vehicleID, newHealth, maxHealth):
+        if self.special():
+            return
+        if maxHealth <= 0:
+            return
+        self.hp[vehicleID] = {'current': max(0, newHealth), 'max': maxHealth}
+        self.render(vehicleID)
+
+    def refresh(self):
+        if self.arena is None:
+            return
+        for vehicleID in tuple(self.hp):
+            self.render(vehicleID)
+
+    def render(self, vehicleID):
+        record = self.hp.get(vehicleID)
+        if not record or record['max'] <= 0 or self.special():
             return
         try:
-            snapshot = self._collect()
-            if snapshot != self._snapshot:
-                self._snapshot = snapshot
-                if self._bridge is not None:
-                    self._bridge.update(snapshot)
+            provider = dependency.instance(IBattleSessionProvider)
+            arenaDP = provider.getArenaDP()
+            info = arenaDP.getVehicleInfo(vehicleID)
+            if info is None or info.isObserver():
+                return
+            if arenaDP.isPlayerObserver():
+                ally = avatar_getter.getPlayerTeam() == info.team
+            else:
+                ally = arenaDP.isAllyTeam(info.team)
+            side = 'left' if ally else 'right'
+            current = record['current']
+            maximum = record['max']
+            payload = {}
+            for field_name, pair in sorted(self.templates.iteritems()):
+                field = pair[side]
+                width = current
+                if 'width' in field:
+                    width = int(math.ceil(field['width'] * float(current) / maximum))
+                    width = max(0, min(field['width'], width))
+                text = ''
+                if self.displayed and current > 0:
+                    text = field['text'] % {'curHealth': current,
+                                            'maxHealth': maximum,
+                                            'barWidth': width}
+                payload['HPbars_' + field_name] = text
+            self.bridge.update_vehicle(vehicleID, side, payload)
         except Exception:
-            log('hp polling failed: %s' % traceback.format_exc())
-        if self.running:
-            try:
-                interval = max(0.1, float(self.config.get('pollInterval', 0.2)))
-                self.tick_id = BigWorld.callback(interval, self._tick)
-            except Exception:
-                log('callback scheduling failed')
+            log('render error: %s' % traceback.format_exc())
+
+    def redraw(self):
+        for vehicleID in tuple(self.hp):
+            self.render(vehicleID)
+
+    def on_key(self, event):
+        if self.special() or not self.config.get('enabled', True):
+            return
+        key = getattr(event, 'key', None)
+        down = bool(event.isKeyDown())
+        hotkey = self.config.get('switchModeHotKey', [Keys.KEY_F12])
+        # Original hotkey requires Ctrl; F12 by default, configurable.
+        try:
+            modifier_down = (BigWorld.isKeyDown(Keys.KEY_LCONTROL) or
+                             BigWorld.isKeyDown(Keys.KEY_RCONTROL))
+        except Exception:
+            modifier_down = False
+        if down and key in hotkey and modifier_down:
+            self.only_on_key = not self.only_on_key
+            self.displayed = not self.only_on_key
+            self.redraw()
+        elif self.only_on_key and key in (Keys.KEY_LALT, getattr(Keys, 'KEY_RALT', -1)):
+            self.displayed = down
+            self.redraw()
 
 
-controller = HpoldController()
+controller = HPController() if IMPORTS_OK else None
 
 
-def on_battle_loaded():
-    controller.start()
-
-
-def on_battle_closed():
-    controller.stop()
-
-
-def register():
-    if BigWorld is None:
+def install():
+    if controller is None:
+        print '[Hpold] Missing WoT client modules; initialization skipped'
         return
-    try:
-        from gui.shared.personality import ServicesLocator
-        from skeletons.gui.app_loader import GuiGlobalSpaceID
-        loader = ServicesLocator.appLoader
+    if not controller.config.get('enabled', True):
+        return
 
-        def entered(space_id):
-            if space_id == GuiGlobalSpaceID.BATTLE:
-                on_battle_loaded()
+    def update_health(original, panel, vehicleID, newHealth, maxHealth):
+        result = original(panel, vehicleID, newHealth, maxHealth)
+        controller.health_changed(vehicleID, newHealth, maxHealth)
+        return result
 
-        def left(space_id):
-            if space_id == GuiGlobalSpaceID.BATTLE:
-                on_battle_closed()
+    def start_gui(original, avatar, *args, **kwargs):
+        result = original(avatar, *args, **kwargs)
+        controller.start_gui()
+        return result
 
-        loader.onGUISpaceEntered += entered
-        loader.onGUISpaceLeft += left
-        # Retain references so event handlers aren't collected.
-        controller._on_entered = entered
-        controller._on_left = left
-        log('registered')
-    except Exception:
-        log('battle lifecycle unavailable: %s' % traceback.format_exc())
+    def destroy_gui(original, avatar, *args, **kwargs):
+        try:
+            controller.close_gui()
+        finally:
+            return original(avatar, *args, **kwargs)
+
+    def key_event(original, event, *args, **kwargs):
+        result = original(event, *args, **kwargs)
+        controller.on_key(event)
+        return result
+
+    override(PlayersPanel, 'updateVehicleHealth', update_health)
+    override(PlayerAvatar, '_PlayerAvatar__startGUI', start_gui)
+    override(PlayerAvatar, '_PlayerAvatar__destroyGUI', destroy_gui)
+    override(game, 'handleKeyEvent', key_event)
+    # Deliberately do not suppress vanilla HP bars until the custom UI renders.
+    log('battle hooks installed')
 
 
-register()
+install()
