@@ -22,9 +22,9 @@ from skeletons.gui.app_loader import GuiGlobalSpaceID
 
 from .logger import logger
 
-INJECTOR_ALIAS = 'PlayerPanelsAPIInjector'
+INJECTOR_ALIAS = 'inq_hpold_panel_view'
 COMPONENT_ALIAS = 'PlayerPanelsUI'
-SWF_NAME = 'playersPanelAPI_modsCore.swf'
+SWF_NAME = 'inq_hpold.swf'
 
 # These are the original 1.2.4 field positions relative to the players panel.
 # The SWF owns alignment, field insertion, and row-specific placement.
