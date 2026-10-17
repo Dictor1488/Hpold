@@ -2,37 +2,21 @@ package inq.hpold.battle
 {
    import flash.display.DisplayObject;
    import flash.display.DisplayObjectContainer;
-   import flash.filters.ColorMatrixFilter;
    import flash.utils.Dictionary;
 
    import inq.hpold.injector.BattleDisplayable;
 
    public class HpPanel extends BattleDisplayable
    {
-      private static const DEFAULT_LT_COLOR:uint = 0x596E4B;
-      private static const DEFAULT_MT_COLOR:uint = 0x8B6526;
-      private static const DEFAULT_TD_COLOR:uint = 0x3D4658;
-      private static const DEFAULT_SPG_COLOR:uint = 0x684940;
-      private static const DEFAULT_HEAVY_COLOR:uint = 0x808080;
-
       private static const HP_COLUMN_OFFSET:Number = 90;
       private static const FALLBACK_INNER_MARGIN:Number = 4;
 
       private var _data:Dictionary;
       private var _rows:Dictionary;
-      private var _iconBaseFilters:Dictionary;
       private var _disposed:Boolean = false;
       private var _showHealth:Boolean = false;
       private var _showHpBars:Boolean = true;
       private var _enemyHpRed:Boolean = false;
-
-      private var _colorizeIcons:Boolean = true;
-      private var _colorizeHeavy:Boolean = false;
-      private var _ltColor:uint = DEFAULT_LT_COLOR;
-      private var _mtColor:uint = DEFAULT_MT_COLOR;
-      private var _tdColor:uint = DEFAULT_TD_COLOR;
-      private var _spgColor:uint = DEFAULT_SPG_COLOR;
-      private var _heavyColor:uint = DEFAULT_HEAVY_COLOR;
 
       public function HpPanel()
       {
@@ -40,7 +24,6 @@ package inq.hpold.battle
          name = "inqHpoldPanel";
          _data = new Dictionary();
          _rows = new Dictionary();
-         _iconBaseFilters = new Dictionary(true);
       }
 
       private function member(target:*, name:String):*
@@ -143,7 +126,7 @@ package inq.hpold.battle
          if (!row)
          {
             row = new HealthRow();
-            row.name = "hpeHealth_" + vehicleID;
+            row.name = "inqHpoldHealth_" + vehicleID;
             row.visible = false;
             row.setShowBar(_showHpBars);
             row.setEnemyHpRed(_enemyHpRed);
@@ -232,119 +215,6 @@ package inq.hpold.battle
          }
       }
 
-      private function colorForClass(vehicleClass:String):int
-      {
-         if (!_colorizeIcons)
-            return -1;
-
-         switch (vehicleClass ? vehicleClass.toLowerCase() : "")
-         {
-            case "lighttank":
-               return int(_ltColor);
-            case "mediumtank":
-               return int(_mtColor);
-            case "at-spg":
-               return int(_tdColor);
-            case "spg":
-               return int(_spgColor);
-            case "heavytank":
-               return _colorizeHeavy ? int(_heavyColor) : -1;
-         }
-         return -1;
-      }
-
-      private function colorFilter(color:uint):ColorMatrixFilter
-      {
-         var red:Number = ((color >> 16) & 0xFF) / 128.0;
-         var green:Number = ((color >> 8) & 0xFF) / 128.0;
-         var blue:Number = (color & 0xFF) / 128.0;
-         return new ColorMatrixFilter([
-            red, 0, 0, 0, 0,
-            0, green, 0, 0, 0,
-            0, 0, blue, 0, 0,
-            0, 0, 0, 1, 0
-         ]);
-      }
-
-      private function rememberBaseFilters(icon:DisplayObject):Array
-      {
-         var base:Array = _iconBaseFilters[icon] as Array;
-         if (!base)
-         {
-            base = icon.filters ? icon.filters.slice() : [];
-            _iconBaseFilters[icon] = base;
-         }
-         return base;
-      }
-
-      private function restoreIconFilter(icon:DisplayObject):void
-      {
-         var base:Array = _iconBaseFilters[icon] as Array;
-         if (!base)
-            return;
-         try
-         {
-            icon.filters = base.slice();
-         }
-         catch (e:Error)
-         {
-         }
-         delete _iconBaseFilters[icon];
-      }
-
-      private function applyIconColor(vehicleID:int):void
-      {
-         var data:Object = _data[vehicleID];
-         if (!data)
-            return;
-
-         var item:* = getListItem(vehicleID);
-         if (!item)
-            return;
-
-         var icon:DisplayObject = member(item, "vehicleIcon") as DisplayObject;
-         if (!icon)
-            return;
-
-         var color:int = colorForClass(String(data.vehicleClass));
-         if (color < 0)
-         {
-            restoreIconFilter(icon);
-            return;
-         }
-
-         try
-         {
-            var filters:Array = rememberBaseFilters(icon).slice();
-            filters.push(colorFilter(uint(color)));
-            icon.filters = filters;
-         }
-         catch (e:Error)
-         {
-         }
-      }
-
-      private function applyAllIconColors():void
-      {
-         if (_disposed)
-            return;
-         for (var key:* in _data)
-            applyIconColor(int(key));
-      }
-
-      private function restoreIconColors():void
-      {
-         var icons:Array = [];
-         for (var key:* in _iconBaseFilters)
-            icons.push(key);
-         for each (var icon:DisplayObject in icons)
-         {
-            if (icon)
-               restoreIconFilter(icon);
-         }
-         _iconBaseFilters = new Dictionary(true);
-      }
-
       private function applyVehicle(vehicleID:int):void
       {
          var data:Object = _data[vehicleID];
@@ -367,7 +237,6 @@ package inq.hpold.battle
          row.updateHealth(int(data.currentHealth), int(data.maxHealth), enemy);
          positionRow(vehicleID, item, row, enemy);
 
-         applyIconColor(vehicleID);
       }
 
       public function as_setVehicleHealth(vehicleID:int, currentHealth:int, maxHealth:int, vehicleClass:String = ""):void
@@ -377,36 +246,17 @@ package inq.hpold.battle
          _data[vehicleID] = {
             currentHealth: Math.max(0, currentHealth),
             maxHealth: Math.max(0, maxHealth),
-            vehicleClass: vehicleClass ? vehicleClass : ""
+            vehicleClass: ""
          };
          applyVehicle(vehicleID);
       }
 
       public function as_setIconSettings(
-         enabled:Boolean,
-         colorizeHeavy:Boolean,
-         ltColor:uint,
-         mtColor:uint,
-         tdColor:uint,
-         spgColor:uint,
-         heavyColor:uint
+         enabled:Boolean, colorizeHeavy:Boolean, ltColor:uint, mtColor:uint,
+         tdColor:uint, spgColor:uint, heavyColor:uint
       ):void
       {
-         if (_disposed)
-            return;
-
-         if (!enabled && _colorizeIcons)
-            restoreIconColors();
-
-         _colorizeIcons = enabled;
-         _colorizeHeavy = colorizeHeavy;
-         _ltColor = ltColor;
-         _mtColor = mtColor;
-         _tdColor = tdColor;
-         _spgColor = spgColor;
-         _heavyColor = heavyColor;
-
-         applyAllIconColors();
+         // Compatibility hook only: never recolor or draw tank icons.
       }
 
       public function as_setDisplaySettings(showHpBars:Boolean, enemyHpRed:Boolean):void
@@ -456,7 +306,6 @@ package inq.hpold.battle
                row.parent.removeChild(row);
          }
 
-         restoreIconColors();
          _rows = new Dictionary();
          _data = new Dictionary();
       }
