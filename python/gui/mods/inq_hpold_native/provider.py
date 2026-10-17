@@ -148,7 +148,7 @@ class HealthProvider(object):
 
     def applySettings(self):
         try:
-            g_events.setIconSettings(*g_settings.iconSettings())
+            g_events.setDisplaySettings(*g_settings.displaySettings())
             self._applyVisibility(force=True)
             g_events.refreshAll()
         except Exception:
