@@ -56,8 +56,8 @@ FIELDS = (
         'right': {'align': 'left', 'text': "<img src='img://gui/hpbars/hp_alive_r.png' width='%(barWidth)d' height='14'>", 'width': 72, 'x': -176, 'y': 3}}),
     ('1text', {
         'isHtml': True,
-        'left': {'align': 'center', 'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'width': 72, 'height': 18, 'x': 85, 'y': 1},
-        'right': {'align': 'center', 'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'width': 72, 'height': 18, 'x': -176, 'y': 1}})
+        'left': {'align': 'center', 'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'x': 100, 'y': 3},
+        'right': {'align': 'center', 'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'x': -160, 'y': 3}})
 )
 PREFIX = 'HPbars_'
 EMPTY = '<font face="$FieldFont" color="#FFFFFF" size="11"></font>'
