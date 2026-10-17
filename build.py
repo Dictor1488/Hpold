@@ -2,12 +2,13 @@
 """inq_hpold standalone native panel package."""
 from pathlib import Path
 import argparse
+import os
 import subprocess
 import zipfile
 import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parent
-VERSION='0.2.0-alpha1'
+VERSION=os.environ.get('PROJECT_VERSION', '0.2.0-alpha1')
 LIBS=('base_app-1.0-SNAPSHOT.swc','battle.swc','common-1.0-SNAPSHOT.swc','common_i18n_library-1.0-SNAPSHOT.swc','gui_base-1.0-SNAPSHOT.swc','gui_battle-1.0-SNAPSHOT.swc','gui_lobby-1.0-SNAPSHOT.swc','lobby.swc','playerglobal.swc')
 
 def build(python27):
