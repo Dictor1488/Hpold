@@ -1,40 +1,29 @@
 package inq.hpold.battle
 {
-   import flash.display.Bitmap;
    import flash.display.DisplayObject;
    import flash.display.DisplayObjectContainer;
-   import flash.display.Shape;
    import flash.display.Sprite;
    import flash.events.Event;
-   import flash.filters.DropShadowFilter;
    import flash.text.TextField;
-   import flash.text.TextFormat;
    import flash.utils.Dictionary;
    import flash.utils.getTimer;
    import inq.hpold.injector.BattleDisplayable;
 
    /**
-    * Independent HP bars rendered with the original PlayersPanelHP textures.
-    * The fill is clipped instead of stretched, preserving the source artwork.
+    * Standalone renderer matching PlayersPanelHP 1.2.4 and its
+    * playersPanelAPI_modsCore.swf TextField implementation.
     */
    public class PlayerPanelsUI extends BattleDisplayable
    {
-      [Embed(source="../../../../../../vendor/res/gui/hpbars/hp_bg.png")]
-      private static const HP_BG:Class;
+      private static const BAR_WIDTH:Number = 72;
+      private static const BAR_HEIGHT:Number = 14;
+      private static const FIELD_HEIGHT:Number = 24;
+      private static const LABEL_WIDTH:Number = 100;
 
-      [Embed(source="../../../../../../vendor/res/gui/hpbars/hp_alive_l.png")]
-      private static const HP_ALIVE_LEFT:Class;
-
-      [Embed(source="../../../../../../vendor/res/gui/hpbars/hp_alive_r.png")]
-      private static const HP_ALIVE_RIGHT:Class;
-
-      [Embed(source="../../../../../../vendor/res/gui/hpbars/hp_alive_cb.png")]
-      private static const HP_ALIVE_COLORBLIND:Class;
-
-      private static const WIDTH:Number = 72;
-      private static const HEIGHT:Number = 14;
       private var _rows:Dictionary = new Dictionary();
       private var _wanted:Dictionary = new Dictionary();
+      private var _fillWidths:Dictionary = new Dictionary();
+      private var _showBars:Dictionary = new Dictionary();
       private var _lastLayout:int = 0;
 
       public function PlayerPanelsUI()
@@ -45,13 +34,14 @@ package inq.hpold.battle
 
       public function as_create(linkage:String, kind:String, config:Object):void
       {
-         // Retained for the DAAPI contract; rows are created by as_update.
+         // Rows are created lazily by as_update.
       }
 
       public function as_update(linkage:String, data:Object):void
       {
          if (linkage != "hp_row" || data == null || !data.hasOwnProperty("vehicleID"))
             return;
+
          var id:int = int(data.vehicleID);
          var row:Sprite = _rows[id] as Sprite;
          if (row == null)
@@ -59,23 +49,21 @@ package inq.hpold.battle
             row = makeRow();
             _rows[id] = row;
          }
-         _wanted[id] = Boolean(data.visible) && Number(data.maximum) > 0 &&
-                       Number(data.current) > 0;
-         row.visible = Boolean(_wanted[id]);
+
          var current:int = Math.max(0, int(data.current));
          var maximum:int = Math.max(1, int(data.maximum));
          var ratio:Number = Math.max(0, Math.min(1, Number(current) / maximum));
-         var fillLayer:Sprite = row.getChildByName("fillLayer") as Sprite;
-         var fillMask:Shape = row.getChildByName("fillMask") as Shape;
+         _fillWidths[id] = Math.ceil(BAR_WIDTH * ratio);
+         _showBars[id] = Boolean(data.showBar);
+         _wanted[id] = Boolean(data.visible) && Number(data.maximum) > 0 && current > 0;
+
          var label:TextField = row.getChildByName("hpLabel") as TextField;
+         label.htmlText = "<font face='$FieldFont' color='#FFFFFF' size='11'>" +
+                          current + "/" + maximum + "</font>";
+
          var enemy:Boolean = placeRow(id, row);
-         selectFill(fillLayer, enemy, isColorBlindMode());
-         fillLayer.visible = Boolean(data.showBar) && ratio > 0;
-         fillMask.graphics.clear();
-         fillMask.graphics.beginFill(0xFFFFFF);
-         fillMask.graphics.drawRect(0, 0, Math.round(WIDTH * ratio), HEIGHT);
-         fillMask.graphics.endFill();
-         label.text = current + "/" + maximum;
+         updateFill(row, enemy, int(_fillWidths[id]), Boolean(_showBars[id]));
+         row.visible = Boolean(_wanted[id]);
       }
 
       public function as_delete(linkage:String):void
@@ -89,6 +77,8 @@ package inq.hpold.battle
                row.parent.removeChild(row);
             delete _rows[id];
             delete _wanted[id];
+            delete _fillWidths[id];
+            delete _showBars[id];
          }
       }
 
@@ -98,54 +88,50 @@ package inq.hpold.battle
          row.mouseEnabled = false;
          row.mouseChildren = false;
 
-         var background:Bitmap = makeBitmap(HP_BG, "background");
+         // Original 3bg Label: default 100x24 field at bar position + (1, 1).
+         var background:TextField = makeField("background", LABEL_WIDTH, FIELD_HEIGHT);
          background.x = 1;
          background.y = 1;
+         background.htmlText = "<img src='img://gui/hpbars/hp_bg.png' width='68' height='12'>";
          row.addChild(background);
 
-         var fillLayer:Sprite = new Sprite();
-         fillLayer.name = "fillLayer";
-         fillLayer.addChild(makeBitmap(HP_ALIVE_LEFT, "ally"));
-         fillLayer.addChild(makeBitmap(HP_ALIVE_RIGHT, "enemy"));
-         fillLayer.addChild(makeBitmap(HP_ALIVE_COLORBLIND, "colorblind"));
-         row.addChild(fillLayer);
+         // Original 2img Label: 72x24 field; image width is updated with ceil().
+         var fill:TextField = makeField("fill", BAR_WIDTH, FIELD_HEIGHT);
+         row.addChild(fill);
 
-         var fillMask:Shape = new Shape();
-         fillMask.name = "fillMask";
-         row.addChild(fillMask);
-         fillLayer.mask = fillMask;
-
-         var label:TextField = new TextField();
-         label.name = "hpLabel";
-         label.defaultTextFormat = new TextFormat("Arial", 11, 0xFFFFFF, true, null, null, null, null, "center");
-         label.width = WIDTH;
-         label.height = 18;
-         label.x = 0;
-         label.y = -2;
-         label.selectable = false;
-         label.mouseEnabled = false;
-         label.wordWrap = false;
-         label.filters = [new DropShadowFilter(1, 90, 0, 1, 2, 2, 2)];
+         // Original 1text Label: default 100x24 field and HTML $FieldFont.
+         var label:TextField = makeField("hpLabel", LABEL_WIDTH, FIELD_HEIGHT);
          row.addChild(label);
          return row;
       }
 
-      private function makeBitmap(asset:Class, name:String):Bitmap
+      private function makeField(name:String, width:Number, height:Number):TextField
       {
-         var bitmap:Bitmap = new asset() as Bitmap;
-         bitmap.name = name;
-         bitmap.smoothing = false;
-         return bitmap;
+         var field:TextField = new TextField();
+         field.name = name;
+         field.visible = true;
+         field.width = width;
+         field.height = height;
+         field.selectable = false;
+         field.mouseEnabled = false;
+         return field;
       }
 
-      private function selectFill(layer:Sprite, enemy:Boolean, colorBlind:Boolean):void
+      private function updateFill(row:Sprite, enemy:Boolean, width:int, showBar:Boolean):void
       {
-         var ally:DisplayObject = layer.getChildByName("ally");
-         var red:DisplayObject = layer.getChildByName("enemy");
-         var colorblind:DisplayObject = layer.getChildByName("colorblind");
-         ally.visible = !enemy;
-         red.visible = enemy && !colorBlind;
-         colorblind.visible = enemy && colorBlind;
+         var fill:TextField = row.getChildByName("fill") as TextField;
+         fill.visible = showBar && width > 0;
+         if (!fill.visible)
+         {
+            fill.htmlText = "";
+            return;
+         }
+
+         var asset:String = "hp_alive_l.png";
+         if (enemy)
+            asset = isColorBlindMode() ? "hp_alive_cb.png" : "hp_alive_r.png";
+         fill.htmlText = "<img src='img://gui/hpbars/" + asset +
+                         "' width='" + width + "' height='" + BAR_HEIGHT + "'>";
       }
 
       private function isColorBlindMode():Boolean
@@ -159,6 +145,7 @@ package inq.hpold.battle
          {
             return false;
          }
+         return false;
       }
 
       private function placeRow(vehicleID:int, row:Sprite):Boolean
@@ -182,6 +169,7 @@ package inq.hpold.battle
                row.visible = false;
                return enemy;
             }
+
             var item:DisplayObjectContainer = holder._listItem as DisplayObjectContainer;
             if (item == null || holder._listItem.vehicleIcon == null)
                return enemy;
@@ -191,13 +179,19 @@ package inq.hpold.battle
                   row.parent.removeChild(row);
                item.addChild(row);
             }
+
             var icon:DisplayObject = holder._listItem.vehicleIcon as DisplayObject;
             row.x = Math.round(icon.x + (enemy ? -176 : 85));
-            row.y = Math.round(icon.y + 2);
+            row.y = Math.round(icon.y + 3);
+
+            // Original text field x values are -160/100 while bar values are
+            // -176/85, hence offsets 16 and 15 inside this row.
+            var label:TextField = row.getChildByName("hpLabel") as TextField;
+            label.x = enemy ? 16 : 15;
+            label.y = 0;
+
+            updateFill(row, enemy, int(_fillWidths[vehicleID]), Boolean(_showBars[vehicleID]));
             row.visible = Boolean(_wanted[vehicleID]);
-            var fillLayer:Sprite = row.getChildByName("fillLayer") as Sprite;
-            if (fillLayer != null)
-               selectFill(fillLayer, enemy, isColorBlindMode());
             return enemy;
          }
          catch (e:Error)
@@ -205,8 +199,7 @@ package inq.hpold.battle
             trace("[inq_hpold] placeRow " + vehicleID + ": " + e.message);
             return false;
          }
-         // Older ASC/Flex control-flow analysis does not treat try/catch as
-         // exhaustive even though both branches above return a Boolean.
+         // Flex 4.16's older control-flow analyzer requires a final return.
          return false;
       }
 
