@@ -69,7 +69,7 @@ package inq.hpold.battle
          var fillMask:Shape = row.getChildByName("fillMask") as Shape;
          var label:TextField = row.getChildByName("hpLabel") as TextField;
          var enemy:Boolean = placeRow(id, row);
-         selectFill(fillLayer, enemy, Boolean(data.enemyHpRed));
+         selectFill(fillLayer, enemy);
          fillLayer.visible = Boolean(data.showBar) && ratio > 0;
          fillMask.graphics.clear();
          fillMask.graphics.beginFill(0xFFFFFF);
@@ -138,14 +138,14 @@ package inq.hpold.battle
          return bitmap;
       }
 
-      private function selectFill(layer:Sprite, enemy:Boolean, enemyHpRed:Boolean):void
+      private function selectFill(layer:Sprite, enemy:Boolean):void
       {
          var ally:DisplayObject = layer.getChildByName("ally");
          var red:DisplayObject = layer.getChildByName("enemy");
          var colorblind:DisplayObject = layer.getChildByName("colorblind");
          ally.visible = !enemy;
-         red.visible = enemy && enemyHpRed;
-         colorblind.visible = enemy && !enemyHpRed;
+         red.visible = enemy;
+         colorblind.visible = false;
       }
 
       private function placeRow(vehicleID:int, row:Sprite):Boolean
