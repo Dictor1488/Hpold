@@ -6,6 +6,7 @@ package inq.hpold.battle
    import flash.text.TextField;
    import flash.text.TextFormat;
    import flash.filters.DropShadowFilter;
+   import flash.geom.Rectangle;
 
    public class HealthRow extends Sprite
    {
@@ -100,7 +101,7 @@ package inq.hpold.battle
          if (_maximum > 0)
          {
             var ratio:Number = Math.max(0, Math.min(1, Number(_current) / Number(_maximum)));
-            _fill.scrollRect = new flash.geom.Rectangle(0, 0, Math.ceil(BAR_WIDTH * ratio), 14);
+            _fill.scrollRect = new Rectangle(0, 0, Math.ceil(BAR_WIDTH * ratio), 14);
          }
          addChildAt(_fill, 1);
          _fill.visible = _showBar;
