@@ -25,15 +25,11 @@ jobs:
           $py=$paths | Where-Object {Test-Path $_} | Select-Object -First 1
           if (-not $py) {throw 'Python 2.7 not installed'}
           "PYTHON27=$py" >> $env:GITHUB_ENV
-      - name: Prepare repository SWC libraries
+      - name: Verify repository SWC libraries
         shell: pwsh
         run: |
-          $source = 'as3/src_flash/src/libs'
-          if (-not (Test-Path $source)) { throw 'Missing uploaded SDK libraries' }
-          New-Item -ItemType Directory -Force as3/libs | Out-Null
-          Copy-Item "$source/*.swc" as3/libs/ -Force
           $libs = @(Get-ChildItem as3/libs -Filter *.swc)
-          if ($libs.Count -lt 9) { throw "Expected 9 SWCs; found $($libs.Count)" }
+          if ($libs.Count -ne 9) { throw "Expected 9 SWCs; found $($libs.Count)" }
           Write-Host "Available SWCs: $($libs.Count)"
       - name: Download Flex SDK
         shell: pwsh
