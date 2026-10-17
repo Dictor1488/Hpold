@@ -32,10 +32,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '11'
       - name: Install Python 2.7
         shell: pwsh
         run: |
@@ -44,42 +40,19 @@ jobs:
           $py=$paths | Where-Object {Test-Path $_} | Select-Object -First 1
           if (-not $py) {throw 'Python 2.7 not installed'}
           "PYTHON27=$py" >> $env:GITHUB_ENV
-      - name: Verify repository SWC libraries
+      - name: Verify bundled OldSkool resources
         shell: pwsh
         run: |
-          $libs = @(Get-ChildItem as3/libs -Filter *.swc)
-          if ($libs.Count -ne 9) { throw "Expected 9 SWCs; found $($libs.Count)" }
-          Write-Host "Available SWCs: $($libs.Count)"
-      - name: Download Flex SDK
-        shell: pwsh
-        run: |
-          Invoke-WebRequest https://archive.apache.org/dist/flex/4.16.1/binaries/apache-flex-sdk-4.16.1-bin.zip -OutFile "$env:RUNNER_TEMP\flex.zip"
-          Expand-Archive "$env:RUNNER_TEMP\flex.zip" "$env:RUNNER_TEMP\flex"
-          $root=Get-ChildItem "$env:RUNNER_TEMP\flex" -Recurse -Filter mxmlc.bat | Select-Object -First 1
-          if (-not $root) {throw 'mxmlc not found'}
-          "MXMLC=$($root.FullName)" >> $env:GITHUB_ENV
-          $flexHome=Split-Path (Split-Path $root.FullName)
-          New-Item -ItemType Directory -Force "$flexHome\frameworks\libs\player\32.0" | Out-Null
-          Copy-Item as3/libs/playerglobal.swc "$flexHome\frameworks\libs\player\32.0\playerglobal.swc"
-          $configPath = Join-Path $flexHome 'frameworks/flex-config.xml'
-          $configText = Get-Content $configPath -Raw
-          $playerRoot = (Join-Path $flexHome 'frameworks/libs/player').Replace('\\','/')
-          $configText = $configText.Replace('{playerglobalHome}', $playerRoot)
-          [System.IO.File]::WriteAllText($configPath, $configText)
-          if ((Get-Content $configPath -Raw).Contains('{playerglobalHome}')) { throw 'Unresolved playerglobalHome in flex-config.xml' }
-      - name: Compile owned AS3 renderer
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force as3/bin | Out-Null
-          $a=@('-source-path+=as3/src_flash/src','-output=as3/bin/inq_hpold.swf','-target-player=32.0','-swf-version=39','-strict=true','-optimize=true')
-          Get-ChildItem as3/libs -Filter *.swc | ForEach-Object {
-            if ($_.Name -eq 'playerglobal.swc') {$a+="-library-path+=$($_.FullName)"}
-            else {$a+="-external-library-path+=$($_.FullName)"}
+          $assets = @(
+            'vendor/res/gui/flash/playersPanelAPI_modsCore.swf',
+            'vendor/res/gui/hpbars/hp_bg.png',
+            'vendor/res/gui/hpbars/hp_alive_l.png',
+            'vendor/res/gui/hpbars/hp_alive_r.png',
+            'vendor/res/gui/hpbars/hp_alive_cb.png'
+          )
+          foreach ($asset in $assets) {
+            if (-not (Test-Path $asset)) { throw "Missing resource: $asset" }
           }
-          $a+='--'
-          $a+=(Resolve-Path as3/src_flash/src/InqHpoldPanel.as).Path
-          & $env:MXMLC @a
-          if ($LASTEXITCODE -ne 0) {throw 'ActionScript compilation failed'}
       - name: Package WOTMOD
         shell: pwsh
         run: |
@@ -94,7 +67,9 @@ jobs:
           with zipfile.ZipFile(path) as z:
               assert z.testzip() is None
               names=set(z.namelist())
-              assert 'res/gui/flash/inq_hpold.swf' in names
+              assert 'res/gui/flash/playersPanelAPI_modsCore.swf' in names
+              assert 'res/gui/flash/inq_hpold.swf' not in names
+              assert all('res/gui/hpbars/'+name in names for name in ('hp_bg.png','hp_alive_l.png','hp_alive_r.png','hp_alive_cb.png'))
               assert 'res/scripts/client/gui/mods/mod_inq_hpold.pyc' in names
               assert all(x.compress_type == zipfile.ZIP_STORED for x in z.infolist())
               assert all(not name.endswith('.py') for name in names)
