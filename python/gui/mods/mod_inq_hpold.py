@@ -4,8 +4,6 @@
 No OldSkool/ModScore runtime dependency. Python 2.7 game client.
 """
 import logging
-import math
-import copy
 import Event
 import BigWorld
 import Keys
@@ -43,24 +41,6 @@ INJECTOR_ALIAS = 'inq_hpold_panel_view'
 COMPONENT_ALIAS = 'PlayerPanelsUI'
 SWF_NAME = 'inq_hpold.swf'
 
-# These are the original 1.2.4 field positions relative to the players panel.
-# The SWF owns alignment, field insertion, and row-specific placement.
-FIELDS = (
-    ('3bg', {
-        'isHtml': True,
-        'left': {'align': 'left', 'text': "<img src='img://gui/hpbars/hp_bg.png' width='68' height='12'>", 'x': 86, 'y': 4},
-        'right': {'align': 'left', 'text': "<img src='img://gui/hpbars/hp_bg.png' width='68' height='12'>", 'x': -175, 'y': 4}}),
-    ('2img', {
-        'isHtml': True,
-        'left': {'align': 'left', 'text': "<img src='img://gui/hpbars/hp_alive_l.png' width='%(barWidth)d' height='14'>", 'width': 72, 'x': 85, 'y': 3},
-        'right': {'align': 'left', 'text': "<img src='img://gui/hpbars/hp_alive_r.png' width='%(barWidth)d' height='14'>", 'width': 72, 'x': -176, 'y': 3}}),
-    ('1text', {
-        'isHtml': True,
-        'left': {'align': 'center', 'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'x': 100, 'y': 3},
-        'right': {'align': 'center', 'text': "<font face='$FieldFont' color='#FFFFFF' size='11'>%(curHealth)s/%(maxHealth)s</font>", 'x': -160, 'y': 3}})
-)
-PREFIX = 'HPbars_'
-EMPTY = '<font face="$FieldFont" color="#FFFFFF" size="11"></font>'
 
 
 class PlayerPanelsUI(BaseDAAPIComponent):
@@ -98,9 +78,6 @@ class Events(object):
         self.componentUI = component
         self.viewRequested = True
         try:
-            for key, config in FIELDS:
-                field = PREFIX + key
-                component.as_createS(field, 'Label', _labelConfig(config))
             self.onUIReady()
             self.refreshAll()
         except Exception:
@@ -122,43 +99,16 @@ class Events(object):
         component = self.componentUI
         if component is None:
             return
-        value = self._data.get(vehicleID)
-        if value is None:
+        current, maximum = self._data.get(vehicleID, (0, 0))
+        if maximum <= 0:
             return
-        current, maximum = value
-        width = int(math.ceil(72.0 * current / maximum)) if maximum else 0
-        shown = self._visible and current > 0 and maximum > 0
-        try:
-            for key, config in FIELDS:
-                fieldName = PREFIX + key
-                if not shown or (not self._showBars and key != '1text'):
-                    left = right = EMPTY
-                else:
-                    leftTemplate = config['left']['text']
-                    rightTemplate = config['right']['text']
-                    args = {'curHealth': current, 'maxHealth': maximum, 'barWidth': width}
-                    left = leftTemplate % args
-                    right = rightTemplate % args
-                # Select per-side markup using arena team.
-                text = self._sideText(vehicleID, left, right)
-                component.as_updateS(fieldName, {'vehicleID': vehicleID, 'text': text})
-        except Exception:
-            logger.exception('OldSkool field update failed for %s', vehicleID)
-
-    def _sideText(self, vehicleID, left, right):
-        try:
-            from helpers import dependency
-            from skeletons.gui.battle_session import IBattleSessionProvider
-            arenaDP = dependency.instance(IBattleSessionProvider).getArenaDP()
-            info = arenaDP.getVehicleInfo(int(vehicleID))
-            if info.isObserver():
-                return EMPTY
-            if arenaDP.isPlayerObserver():
-                from gui.battle_control import avatar_getter
-                return left if avatar_getter.getPlayerTeam() == info.team else right
-            return left if arenaDP.isAllyTeam(info.team) else right
-        except Exception:
-            return EMPTY
+        component.as_updateS('hp_row', {
+            'vehicleID': vehicleID,
+            'current': current,
+            'maximum': maximum,
+            'visible': bool(self._visible),
+            'showBar': bool(self._showBars)
+        })
 
     def setVisibility(self, visible):
         self._visible = bool(visible)
@@ -173,14 +123,8 @@ class Events(object):
             self._render(vehicleID)
 
     def clear(self):
-        component = self.componentUI
-        if component is not None:
-            for vehicleID in tuple(self._data):
-                try:
-                    for key, config in FIELDS:
-                        component.as_updateS(PREFIX + key, {'vehicleID': vehicleID, 'text': EMPTY})
-                except Exception:
-                    pass
+        if self.componentUI is not None:
+            self.componentUI.as_deleteS('hp_row')
         self._data.clear()
 
     def onComponentRegistered(self, event):
@@ -202,20 +146,6 @@ class Events(object):
 
 
 g_events = Events()
-
-
-def _labelConfig(config):
-    # Match the default Label settings in original playersPanelAPI.py.
-    result = copy.deepcopy(config)
-    result.setdefault('isHtml', False)
-    result.setdefault('shadow', {'alpha': 90, 'blur': 2, 'color': '000000',
-                                 'strength': 2, 'distance': 0, 'angle': 0})
-    for side, alignment in (('left', 'left'), ('right', 'right')):
-        values = result[side]
-        for key, default in (('x', 0), ('y', 0), ('height', 24),
-                             ('width', 100), ('align', alignment)):
-            values.setdefault(key, default)
-    return result
 
 
 def _onSpaceEntered(spaceID):
