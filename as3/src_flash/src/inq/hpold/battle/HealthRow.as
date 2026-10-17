@@ -4,6 +4,7 @@ package inq.hpold.battle
    import flash.display.Sprite;
    import flash.text.TextField;
    import flash.text.TextFormat;
+   import flash.text.AntiAliasType;
    import flash.filters.DropShadowFilter;
 
    public class HealthRow extends Sprite
@@ -39,16 +40,17 @@ package inq.hpold.battle
          _background = new BackgroundAsset() as Bitmap;
          _fill = new AllyAsset() as Bitmap;
          _text = new TextField();
-         _text.defaultTextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF, false, false, false, null, null, "center");
+         _text.defaultTextFormat = new TextFormat("Arial", 12, 0xFFFFFF, true, false, false, null, null, "center");
          _text.embedFonts = false;
+         _text.antiAliasType = AntiAliasType.ADVANCED;
          _text.selectable = false;
          _text.mouseEnabled = false;
          _text.width = 72;
-         // OldSkool label anchor is 15px after the left bitmap and 16px
-         // after the right bitmap (original x=100/85, -160/-176).
-         _text.x = 15;
-         _text.y = 3;
-         _text.height = TOTAL_HEIGHT;
+         // HTML field coordinates from OldSkool are panel-global, not
+         // local offsets inside this bitmap. Centre text over the 72px bar.
+         _text.x = 0;
+         _text.y = -1;
+         _text.height = 20;
          _text.filters = [new DropShadowFilter(1, 90, 0x000000, 1, 2, 2, 2)];
          _background.x = 1;
          _background.y = 4;
@@ -123,7 +125,6 @@ package inq.hpold.battle
          _fill.y = 3;
          _background.visible = _showBar;
          _fill.visible = _showBar && _current > 0;
-         _text.x = _enemy ? 16 : 15;
          _text.text = (_maximum > 0 && _current > 0)
             ? String(_current) + "/" + String(_maximum) : "";
       }
