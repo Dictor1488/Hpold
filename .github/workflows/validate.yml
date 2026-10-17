@@ -1,0 +1,18 @@
+name: Validate Hpold build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check build script
+        run: python build.py --help
+      - name: Packaging smoke test
+        run: python -m unittest discover -s tests -v
