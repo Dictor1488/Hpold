@@ -1,80 +1,82 @@
-name: inq_hpold • Build and Release
+name: Build and Release inq_hpold
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
-concurrency:
-  group: inq-hpold-release
-  cancel-in-progress: false
-
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
+  release:
+    runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Python 3 for packaging
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Run package tests
-        run: python -m unittest discover -s tests -v
-
-      - name: Validate sources
-        run: python build.py --check
-
-      - name: Build WOTMOD
-        run: python build.py
-
-      - name: Validate downloadable artifact
-        shell: bash
+      - name: Install Python 2.7 compiler
+        shell: pwsh
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          import zipfile
-          files = list(Path('dist').glob('inq_hpold_*.wotmod'))
-          assert len(files) == 1, 'Expected one inq_hpold WOTMOD'
-          with zipfile.ZipFile(files[0]) as mod:
-              assert mod.testzip() is None
-              paths = set(mod.namelist())
-              assert 'res/gui/gen_resources/tv.inq.hpold.json' in paths
-              assert 'res/gui/gameface/mods/inq_hpold/panel/Panel.html' in paths
-              assert 'res/scripts/client/gui/mods/mod_inq_hpold.py' in paths
-              assert not any(path.endswith('.swf') for path in paths)
-          print('Verified:', files[0], 'bytes=', files[0].stat().st_size)
-          PY
-          cd dist
-          sha256sum *.wotmod > SHA256SUMS.txt
+          $python27 = 'C:\Python27\python.exe'
+          if (-not (Test-Path $python27)) {
+            $installer = Join-Path $env:RUNNER_TEMP 'python-2.7.18.amd64.msi'
+            Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/2.7.18/python-2.7.18.amd64.msi' -OutFile $installer -UseBasicParsing
+            $process = Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart', 'TARGETDIR=C:\Python27') -Wait -PassThru
+            if ($process.ExitCode -notin @(0, 3010)) { throw "Python 2.7 installation failed: $($process.ExitCode)" }
+          }
+          if (-not (Test-Path $python27)) { throw 'Python 2.7 unavailable' }
+          & $python27 --version
 
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+      - name: Run source tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -v
+          python build.py --check
+
+      - name: Build inq_hpold
+        shell: pwsh
+        run: |
+          python build.py --python27 C:\Python27\python.exe
+
+      - name: Verify client format
+        shell: pwsh
+        run: |
+          @'
+          import pathlib, zipfile
+          files = list(pathlib.Path('build').glob('inq_hpold_*.wotmod'))
+          assert len(files) == 1, files
+          with zipfile.ZipFile(files[0]) as z:
+              assert z.testzip() is None
+              assert all(i.compress_type == zipfile.ZIP_STORED for i in z.infolist())
+              for name in ('mod_inq_hpold.pyc', 'inq_hpold_ui.pyc'):
+                  data = z.read('res/scripts/client/gui/mods/' + name)
+                  assert data[:4] == bytes.fromhex('03f30d0a'), name
+              assert not any(x.endswith('.py') or x.endswith('.swf') for x in z.namelist())
+          print('Verified:', files[0], files[0].stat().st_size)
+          '@ | python -
+          cd build
+          Get-FileHash *.wotmod -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: inq_hpold-0.1.0-rc1
+          name: inq_hpold-0.1.0-rc2
           path: |
-            dist/*.wotmod
-            dist/SHA256SUMS.txt
+            build/*.wotmod
+            build/SHA256SUMS.txt
           if-no-files-found: error
+          compression-level: 0
 
-      - name: Publish GitHub prerelease
+      - name: Publish release candidate
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        shell: bash
+        shell: pwsh
         run: |
-          TAG="v0.1.0-rc1"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.wotmod dist/SHA256SUMS.txt --clobber
-            gh release edit "$TAG" --title "inq_hpold 0.1.0 RC1" --prerelease --latest=false --notes-file RELEASE_NOTES.md
-          else
-            gh release create "$TAG" dist/*.wotmod dist/SHA256SUMS.txt \
-              --target "${GITHUB_SHA}" \
-              --title "inq_hpold 0.1.0 RC1" \
-              --prerelease --latest=false --notes-file RELEASE_NOTES.md
-          fi
+          $tag = 'v0.1.0-rc2'
+          gh release create $tag build/*.wotmod build/SHA256SUMS.txt --target $env:GITHUB_SHA --title 'inq_hpold 0.1.0 RC2' --prerelease --latest=false --notes-file RELEASE_NOTES.md
