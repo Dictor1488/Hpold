@@ -15,6 +15,15 @@ class BuildTests(unittest.TestCase):
         config = json.loads(entries[build.RESOURCE].decode('utf-8'))
         self.assertEqual(config[0]['parameters']['impl'], 'gameface')
 
+    def test_gameface_layout_does_not_use_unsupported_css_variables(self):
+        entries = build.assets()
+        css = entries[build.PANEL + 'Panel.css'].decode('utf-8')
+        js = entries[build.PANEL + 'Panel.js'].decode('utf-8')
+        self.assertNotIn('var(--', css)
+        self.assertIn('style.left', js)
+        self.assertIn('style.top', js)
+        self.assertIn('window.addEventListener', js)
+
     def test_client_python_sources(self):
         for name in build.SOURCES:
             self.assertTrue((build.ROOT / name).is_file())
