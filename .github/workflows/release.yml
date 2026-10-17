@@ -7,7 +7,7 @@ on:
       version:
         description: 'Release version'
         required: true
-        default: '0.2.0-alpha1'
+        default: '0.2.0-alpha2'
         type: string
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
       - name: Resolve version
         shell: pwsh
         run: |
-          $version = '0.2.0-alpha1'
+          $version = '0.2.0-alpha2'
           if ("${{ github.event_name }}" -eq 'workflow_dispatch') {
             $version = "${{ inputs.version }}".Trim()
           } elseif ("${{ github.ref_type }}" -eq 'tag') {
