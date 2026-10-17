@@ -2,6 +2,10 @@
 import BigWorld
 import Keys
 from Avatar import PlayerAvatar
+try:
+    from gui.Scaleform.daapi.view.battle.shared.players_panel import PlayersPanel
+except ImportError:
+    PlayersPanel = None
 from helpers import dependency
 from skeletons.gui.battle_session import IBattleSessionProvider
 
@@ -34,7 +38,6 @@ class HealthProvider(object):
         self._health = {}
         self._maxHealth = {}
         self._vehicleClass = {}
-        self._callback = None
         self._session = 0
         self._subscribed = []
 
@@ -59,12 +62,6 @@ class HealthProvider(object):
     def stop(self, clear_session=True):
         if clear_session:
             self._session += 1
-        if self._callback is not None:
-            try:
-                BigWorld.cancelCallback(self._callback)
-            except Exception:
-                pass
-            self._callback = None
         self._unsubscribeArena()
         self._arena = None
         self._health.clear()
@@ -169,7 +166,6 @@ class HealthProvider(object):
             self._subscribeArena()
             self._pushAll()
             self._applyVisibility(force=True)
-            self._schedulePoll(session)
             logger.info('inq_hpold provider started for %s vehicles', len(self._maxHealth))
         except Exception:
             logger.exception('inq_hpold provider start failed')
@@ -409,48 +405,37 @@ class HealthProvider(object):
             )
         g_events.refreshAll()
 
-    def _schedulePoll(self, session):
-        if session != self._session or self._arena is None:
+    def onPanelHealth(self, vehicleID, newHealth, maxHealth):
+        """Use the health values already delivered by WoT to PlayersPanel."""
+        if self._arena is None:
             return
         try:
-            self._callback = BigWorld.callback(0.35, lambda: self._poll(session))
+            vehicleID = int(vehicleID)
+            maximum = max(0, int(maxHealth))
+            current = max(0, int(newHealth))
+            if maximum <= 0:
+                return
+            current = min(maximum, current)
+            previous = (self._health.get(vehicleID), self._maxHealth.get(vehicleID))
+            self._health[vehicleID] = current
+            self._maxHealth[vehicleID] = maximum
+            if previous != (current, maximum):
+                g_events.setVehicleHealth(
+                    vehicleID, current, maximum, self._classForVehicle(vehicleID))
         except Exception:
-            self._callback = None
-
-    def _poll(self, session):
-        self._callback = None
-        if session != self._session or self._arena is None:
-            return
-        try:
-            changed = False
-            for vehicleID, maxHealth in self._maxHealth.items():
-                value = self._readCurrentHealth(vehicleID, self._health.get(vehicleID, maxHealth))
-                value = min(maxHealth, value)
-                if self._health.get(vehicleID) != value:
-                    self._health[vehicleID] = value
-                    g_events.setVehicleHealth(
-                        vehicleID,
-                        value,
-                        maxHealth,
-                        self._classForVehicle(vehicleID)
-                    )
-                    changed = True
-            if changed:
-                g_events.refreshAll()
-        except Exception:
-            logger.exception('inq_hpold health poll failed')
-        self._schedulePoll(session)
+            logger.exception('Could not process WoT PlayersPanel health update')
 
 
 g_provider = HealthProvider()
 _origBecomePlayer = None
 _origBecomeNonPlayer = None
 _origHandleKey = None
+_origPanelHealth = None
 _hooksInstalled = False
 
 
 def install_hooks():
-    global _origBecomePlayer, _origBecomeNonPlayer, _origHandleKey, _hooksInstalled
+    global _origBecomePlayer, _origBecomeNonPlayer, _origHandleKey, _origPanelHealth, _hooksInstalled
     if _hooksInstalled:
         return
     _origBecomePlayer = PlayerAvatar.onBecomePlayer
@@ -482,6 +467,19 @@ def install_hooks():
             logger.exception('inq_hpold key handler failed')
         return result
 
+    if PlayersPanel is not None:
+        _origPanelHealth = getattr(PlayersPanel, 'updateVehicleHealth', None)
+        if callable(_origPanelHealth):
+            def patchedPanelHealth(panel, vehicleID, newHealth, maxHealth):
+                result = _origPanelHealth(panel, vehicleID, newHealth, maxHealth)
+                g_provider.onPanelHealth(vehicleID, newHealth, maxHealth)
+                return result
+            PlayersPanel.updateVehicleHealth = patchedPanelHealth
+        else:
+            logger.warning('PlayersPanel.updateVehicleHealth unavailable; arena events only')
+    else:
+        logger.warning('PlayersPanel class unavailable; arena events only')
+
     PlayerAvatar.onBecomePlayer = patchedBecomePlayer
     PlayerAvatar.onBecomeNonPlayer = patchedBecomeNonPlayer
     if _origHandleKey is not None:
@@ -505,4 +503,6 @@ def remove_hooks():
         PlayerAvatar.onBecomeNonPlayer = _origBecomeNonPlayer
     if _origHandleKey is not None:
         PlayerAvatar.handleKey = _origHandleKey
+    if PlayersPanel is not None and _origPanelHealth is not None:
+        PlayersPanel.updateVehicleHealth = _origPanelHealth
     _hooksInstalled = False
