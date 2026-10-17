@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Standalone Scaleform bridge for inq_inq_hpold (no  import).
+"""Standalone Scaleform bridge for inq_hpold (independent game module).
 
-Own copy of the internal players-panel injector protocol. Only the tiny
-PlayerPanelsAPI injector SWF is used as a local rendering asset.
+Own copy of the internal players-panel injector protocol. Uses a dedicated inq_hpold.swf renderer shipped as part of this mod.
 """
 import copy
 import traceback
@@ -176,7 +175,7 @@ def _ready():
 
 
 def _initialize():
-    # The SWF's code uses the internal InqHpPanelUI linkage.
+    # Dedicated UI linkage.
     g_entitiesFactories.addSettings(ViewSettings(
         VIEW_INJECTOR, View, SWF_NAME, WindowLayer.WINDOW,
         None, ScopeTemplates.GLOBAL_SCOPE))
