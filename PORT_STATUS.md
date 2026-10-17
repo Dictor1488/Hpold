@@ -1,19 +1,19 @@
-# Hpold — стан перенесення
+# Hpold — integration status (WoT 2.4.1 target)
 
-## Відновлено з `mod_playersPanelHP.py`
-- [x] Обробник `PlayersPanel.updateVehicleHealth(vehicleID,newHealth,maxHealth)` як джерело HP.
-- [x] Кеш HP та `arena.onVehicleKilled` для обнулення HP.
-- [x] Визначення ally/enemy за `IBattleSessionProvider.getArenaDP()`.
-- [x] Оригінальні HTML-шаблони для `1text`, `2img`, `3bg`, з координатами та адресами PNG.
-- [x] Ширина активної шкали `ceil(72 * current / max)` (оригінальний HTML-розмір 72).
-- [x] Режим постійного показу або показу через Alt; Ctrl + налаштована клавіша перемикає режим.
-- [x] Прямі Python-обгортки (без `gui.oldskool`/modsCore) для battle lifecycle і HP.
-- [x] Відокремлений renderer contract `hpold_bridge.register_renderer(renderer)`.
+## Implemented in repository
+- [x] Source-grounded Python HP callbacks from recovered `mod_playersPanelHP.py`.
+- [x] Hook `PlayersPanel.updateVehicleHealth` and lifecycle `PlayerAvatar.__startGUI/__destroyGUI`.
+- [x] Arena vehicle-killed event, ally/enemy selection via `IBattleSessionProvider`.
+- [x] Exact three original HTML templates and bar width math, color-blind PNG selection.
+- [x] Original Ctrl+hotkey and hold-Alt behavior.
+- [x] Independent Scaleform injector and PlayerPanelsUI bridge implementing original `as_create/as_update/as_delete` protocol.
+- [x] Game-independent build script for a standalone WOTMOD containing original 3KB visual injector (extracts it from user-supplied reference ZIP at *build time*) plus the four PNGs.
+- [x] No Python import of oldskool/modsCore.
 
-## Не завершено
-- [ ] Підключити перенесений користувачем UI до `register_renderer`; потрібен об'єкт з методами `create_field(name, definition)`, `update_field(name,vehicleID,text)`. Без цього HP обчислюється, але НЕ малюється.
-- [ ] Перевірити точні сигнатури й наявність викликів у клієнті World of Tanks 2.4.1.
-- [ ] Перевірити реальне малювання, щільність рядків панелей, помилки game.log, режим Alt, повторний бій.
-- [ ] Перенести PNG-ресурси в репозиторій/пакет із відповідними шляхами.
+## Verification needed
+- [ ] Test with WoT 2.4.1 client and inspect game.log (hook import paths/signatures).
+- [ ] Confirm the original visual injector SWF can bind `PlayerPanelsUI` under the client's current Scaleform environment.
+- [ ] Confirm layer positions, battle cleanup and full screen/hotkey behavior.
+- [ ] Validate configuration handling and visual priority compared to vanilla HP.
 
-Це **інтеграційна версія, не реліз**. Джерело — декомпільований оригінальний `mod_playersPanelHP.py`; стара спроба polling HP видалена.
+**Unverified development build, not a stable release.** Source repo does not include the binary SWF directly; `build.py` extracts only that visual component from the provided reference archive and assembles the standalone WOTMOD.
