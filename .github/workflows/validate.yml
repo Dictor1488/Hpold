@@ -20,8 +20,7 @@ jobs:
           root=Path('.')
           expected=[
             'as3/src_flash/src/InqHpoldPanel.as',
-            'as3/src_flash/src/inq/hpold/battle/HpPanel.as',
-            'as3/src_flash/src/inq/hpold/battle/HealthRow.as',
+            'as3/src_flash/src/inq/hpold/battle/PlayerPanelsUI.as',
             'python/gui/mods/mod_inq_hpold.py',
           ]
           assert all((root/p).is_file() for p in expected)
