@@ -42,6 +42,12 @@ jobs:
           $flexHome=Split-Path (Split-Path $root.FullName)
           New-Item -ItemType Directory -Force "$flexHome\frameworks\libs\player\32.0" | Out-Null
           Copy-Item as3/libs/playerglobal.swc "$flexHome\frameworks\libs\player\32.0\playerglobal.swc"
+          $configPath = Join-Path $flexHome 'frameworks/flex-config.xml'
+          $configText = Get-Content $configPath -Raw
+          $playerRoot = (Join-Path $flexHome 'frameworks/libs/player').Replace('\\','/')
+          $configText = $configText.Replace('{playerglobalHome}', $playerRoot)
+          [System.IO.File]::WriteAllText($configPath, $configText)
+          if ((Get-Content $configPath -Raw).Contains('{playerglobalHome}')) { throw 'Unresolved playerglobalHome in flex-config.xml' }
       - name: Compile owned AS3 renderer
         shell: pwsh
         run: |
