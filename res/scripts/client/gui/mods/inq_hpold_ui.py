@@ -26,8 +26,8 @@ class HPModel(ViewModel):
 
 class HPView(ViewImpl):
     def __init__(self):
-        from openwg_gameface import ModDynAccessor
-        layout_id = ModDynAccessor(LAYOUT)()
+        from gui.impl.gen import R
+        layout_id = R.mods.inq_hpold.panel.layoutID()
         super(HPView, self).__init__(
             ViewSettings(layout_id, flags=ViewFlags.VIEW, model=HPModel()))
 
@@ -59,7 +59,6 @@ class Bridge(object):
         if not self.active or generation != self.generation or self.window is not None:
             return
         try:
-            from openwg_gameface import ModDynAccessor
             parent = dependency.instance(IGuiLoader).windowsManager.getMainWindow()
             if parent is None or getattr(parent, 'proxy', None) is None:
                 raise RuntimeError('Main window not ready')
