@@ -56,7 +56,7 @@ class PlayerPanelsUI(BaseDAAPIComponent):
         super(PlayerPanelsUI, self)._dispose()
 
     def destroy(self):
-        if self.getState() == EntityState.CREATED:
+        if self.getState() != EntityState.CREATED:
             super(PlayerPanelsUI, self).destroy()
 
     def as_createS(self, linkage, kind, config):
