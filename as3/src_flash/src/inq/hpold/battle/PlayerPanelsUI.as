@@ -9,6 +9,7 @@ package inq.hpold.battle
    import flash.text.TextField;
    import flash.text.TextFormat;
    import flash.utils.Dictionary;
+   import flash.utils.getTimer;
    import inq.hpold.injector.BattleDisplayable;
 
    /**
@@ -20,6 +21,8 @@ package inq.hpold.battle
       private static const WIDTH:Number = 84;
       private static const HEIGHT:Number = 16;
       private var _rows:Dictionary = new Dictionary();
+      private var _wanted:Dictionary = new Dictionary();
+      private var _lastLayout:int = 0;
 
       public function PlayerPanelsUI()
       {
@@ -43,8 +46,9 @@ package inq.hpold.battle
             row = makeRow();
             _rows[id] = row;
          }
-         row.visible = Boolean(data.visible) && Number(data.maximum) > 0 &&
+         _wanted[id] = Boolean(data.visible) && Number(data.maximum) > 0 &&
                        Number(data.current) > 0;
+         row.visible = Boolean(_wanted[id]);
          var current:int = Math.max(0, int(data.current));
          var maximum:int = Math.max(1, int(data.maximum));
          var ratio:Number = Math.max(0, Math.min(1, Number(current) / maximum));
@@ -71,6 +75,7 @@ package inq.hpold.battle
             if (row && row.parent)
                row.parent.removeChild(row);
             delete _rows[id];
+            delete _wanted[id];
          }
       }
 
@@ -137,6 +142,7 @@ package inq.hpold.battle
             var icon:DisplayObject = holder._listItem.vehicleIcon as DisplayObject;
             row.x = Math.round(icon.x + (enemy ? -176 : 85));
             row.y = Math.round(icon.y + 2);
+            row.visible = Boolean(_wanted[vehicleID]);
             return enemy;
          }
          catch (e:Error)
@@ -148,6 +154,10 @@ package inq.hpold.battle
 
       private function relayout(event:Event):void
       {
+         var now:int = getTimer();
+         if (now - _lastLayout < 250)
+            return;
+         _lastLayout = now;
          for (var id:* in _rows)
          {
             var row:Sprite = _rows[id] as Sprite;
