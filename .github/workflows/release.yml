@@ -1,0 +1,80 @@
+name: inq_hpold • Build and Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: inq-hpold-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run package tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate sources
+        run: python build.py --check
+
+      - name: Build WOTMOD
+        run: python build.py
+
+      - name: Validate downloadable artifact
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          files = list(Path('dist').glob('inq_hpold_*.wotmod'))
+          assert len(files) == 1, 'Expected one inq_hpold WOTMOD'
+          with zipfile.ZipFile(files[0]) as mod:
+              assert mod.testzip() is None
+              paths = set(mod.namelist())
+              assert 'res/gui/gen_resources/tv.inq.hpold.json' in paths
+              assert 'res/gui/gameface/mods/inq_hpold/panel/Panel.html' in paths
+              assert 'res/scripts/client/gui/mods/mod_inq_hpold.py' in paths
+              assert not any(path.endswith('.swf') for path in paths)
+          print('Verified:', files[0], 'bytes=', files[0].stat().st_size)
+          PY
+          cd dist
+          sha256sum *.wotmod > SHA256SUMS.txt
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inq_hpold-0.1.0-rc1
+          path: |
+            dist/*.wotmod
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          TAG="v0.1.0-rc1"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.wotmod dist/SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --title "inq_hpold 0.1.0 RC1" --prerelease --latest=false --notes-file RELEASE_NOTES.md
+          else
+            gh release create "$TAG" dist/*.wotmod dist/SHA256SUMS.txt \
+              --target "${GITHUB_SHA}" \
+              --title "inq_hpold 0.1.0 RC1" \
+              --prerelease --latest=false --notes-file RELEASE_NOTES.md
+          fi
