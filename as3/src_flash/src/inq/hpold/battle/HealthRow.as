@@ -20,7 +20,7 @@ package inq.hpold.battle
       private static const ColorblindAsset:Class;
 
       public static const BAR_WIDTH:Number = 72;
-      public static const TOTAL_WIDTH:Number = 110;
+      public static const TOTAL_WIDTH:Number = 88;
       public static const TOTAL_HEIGHT:Number = 18;
       private var _background:Bitmap;
       private var _fill:Bitmap;
@@ -43,7 +43,9 @@ package inq.hpold.battle
          _text.embedFonts = false;
          _text.selectable = false;
          _text.mouseEnabled = false;
-         _text.width = 100;
+         _text.width = 72;
+         _text.x = 15;
+         _text.y = 3;
          _text.height = TOTAL_HEIGHT;
          _text.filters = [new DropShadowFilter(1, 90, 0x000000, 1, 2, 2, 2)];
          _background.x = 1;
