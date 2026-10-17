@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parent
 VERSION='0.2.0-alpha1'
-LIBS=('base_app-1.0-SNAPSHOT.swc','battle.swc','common-1.0-SNAPSHOT.swc','common_i18n_library-1.0-SNAPSHOT.swc','gui_base.swc','gui_battle.swc','gui_lobby.swc','lobby.swc','playerglobal.swc')
+LIBS=('base_app-1.0-SNAPSHOT.swc','battle.swc','common-1.0-SNAPSHOT.swc','common_i18n_library-1.0-SNAPSHOT.swc','gui_base-1.0-SNAPSHOT.swc','gui_battle-1.0-SNAPSHOT.swc','gui_lobby-1.0-SNAPSHOT.swc','lobby.swc','playerglobal.swc')
 
 def build(python27):
     for name in LIBS:
