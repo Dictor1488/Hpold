@@ -10,8 +10,8 @@ HP-індикатори з прив'язкою до фактичних рядк�
 - Окремого Python-ядра не потрібно.
 
 ## Важливо для збірки
-`as3/libs/*.swc` відсутні в цьому репозиторії. Необхідно надати вихідні бібліотеки з іншого власного репозиторію через GitHub Actions secret `HPE_ACCESS_TOKEN` (токен лише з read-доступом до приватного `Dictor1488/HpE`) або додати SDK у `as3/libs` та змінити workflow на локальні бібліотеки.
+9 SWC-бібліотек уже завантажені в `as3/src_flash/src/libs/`. Workflow копіює їх до `as3/libs/` перед компіляцією, без GitHub-токена до інших репозиторіїв.
 
-Потім запустити GitHub Actions → **inq_hpold native AS3 test build** → Run workflow. При успішній компіляції файл буде доступний у Actions → Artifacts як `inq_hpold-native-0.2.0-alpha1`.
+Запустити GitHub Actions → **inq_hpold native AS3 test build** → Run workflow. При успішній компіляції файл буде доступний у Actions → Artifacts як `inq_hpold-native-0.2.0-alpha1`.
 
 **Новий тестовий SWF/WOTMOD ще не зібраний.** Попередні RC2/RC3 залишаються Gameface-версіями з відомою проблемою позиціювання; для тесту нового AS3 потрібен саме артефакт 0.2.0-alpha1.
