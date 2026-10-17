@@ -10,7 +10,6 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parent
 VERSION = os.environ.get('PROJECT_VERSION', '0.2.0-alpha3')
 ASSETS = (
-    'res/gui/flash/playersPanelAPI_modsCore.swf',
     'res/gui/hpbars/hp_bg.png',
     'res/gui/hpbars/hp_alive_l.png',
     'res/gui/hpbars/hp_alive_r.png',
@@ -26,8 +25,10 @@ def build(python27):
             raise RuntimeError('Missing bundled asset: {}'.format(path))
         entries[name] = path.read_bytes()
 
-    if entries[ASSETS[0]][:3] not in (b'FWS', b'CWS', b'ZWS'):
-        raise RuntimeError('Invalid bundled PlayerPanels SWF')
+    swf = ROOT / 'as3' / 'bin' / 'inq_hpold.swf'
+    if not swf.is_file() or swf.read_bytes()[:3] not in (b'FWS', b'CWS', b'ZWS'):
+        raise RuntimeError('Compile inq_hpold.swf from AS3 before packaging')
+    entries['res/gui/flash/inq_hpold.swf'] = swf.read_bytes()
 
     for src in sorted((ROOT / 'python').rglob('*.py')):
         subprocess.check_call([python27, '-m', 'py_compile', str(src)])
@@ -62,7 +63,7 @@ def build(python27):
     with zipfile.ZipFile(output) as archive:
         assert archive.testzip() is None
         assert set(ASSETS).issubset(set(archive.namelist()))
-        assert 'res/gui/flash/inq_hpold.swf' not in archive.namelist()
+        assert 'res/gui/flash/inq_hpold.swf' in archive.namelist()
     print('Built:', output)
 
 
