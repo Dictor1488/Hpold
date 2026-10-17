@@ -3,6 +3,8 @@ package inq.hpold.battle
    import flash.display.DisplayObject;
    import flash.display.DisplayObjectContainer;
    import flash.utils.Dictionary;
+   import flash.utils.getTimer;
+   import flash.events.Event;
 
    import inq.hpold.injector.BattleDisplayable;
 
@@ -17,6 +19,7 @@ package inq.hpold.battle
       private var _showHealth:Boolean = false;
       private var _showHpBars:Boolean = true;
       private var _enemyHpRed:Boolean = false;
+      private var _lastSync:int = 0;
 
       public function HpPanel()
       {
@@ -24,6 +27,20 @@ package inq.hpold.battle
          name = "inqHpoldPanel";
          _data = new Dictionary();
          _rows = new Dictionary();
+         // Player-panel holders are recreated as list modes/rows change.
+         // Re-anchor cached HP rows without polling the health data itself.
+         addEventListener(Event.ENTER_FRAME, onFrameSync);
+      }
+
+      private function onFrameSync(event:Event):void
+      {
+         if (_disposed || !_showHealth)
+            return;
+         var now:int = getTimer();
+         if (now - _lastSync < 250)
+            return;
+         _lastSync = now;
+         as_refreshAll();
       }
 
       private function member(target:*, name:String):*
@@ -313,6 +330,7 @@ package inq.hpold.battle
       override protected function onDispose():void
       {
          _disposed = true;
+         removeEventListener(Event.ENTER_FRAME, onFrameSync);
          as_clear();
          super.onDispose();
       }
