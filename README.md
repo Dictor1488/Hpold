@@ -1,18 +1,25 @@
-# Hpold — standalone HP panels for World of Tanks
+# Hpold — standalone HP panel port
 
-**Статус:** work in progress. Основа власного Python-мода без залежності від OldSkool modsCore. Повна ідентичність HP-панелей та WoT 2.4.1 **не підтверджені**.
+Порт бойової логіки з декомпільованого `mod_playersPanelHP.py` (OldSkool PlayersPanelHP v1.2.4) без залежностей від `modsCore`.
 
-## Мета
-Відтворити OldSkool PlayersPanelHP 1.2.4 з його чотирма оригінальними PNG, меню налаштувань та перемиканням клавішею X, без зовнішнього ядра `modsCore`.
+## Реалізована Python-логіка
+- Hook `PlayersPanel.updateVehicleHealth` для отримання `vehicleID, newHealth, maxHealth`.
+- Очищення HP при `arena.onVehicleKilled`; очищення кешу після бою.
+- Вибір left/right на підставі `IBattleSessionProvider.getArenaDP()`.
+- Три оригінальні HTML-поля на техніку: `1text`, `2img`, `3bg`; оригінальні координати і PNG.
+- Обчислення ширини `ceil(width * currentHP / maxHP)`, приховування при 0 HP.
+- Режими постійного показу та утримання Alt; перемикання Ctrl + hotkey.
+- Колір для дальтонізму (cb) з системних графічних налаштувань.
 
-## Структура
-- `res/scripts/client/gui/mods/mod_hpold.py`: незалежний стартовий модуль, конфігурація, lifecycle, дані HP машин, клавіша X, без зовнішнього API.
-- `res/scripts/client/gui/mods/hpold_bridge.py`: автономна обгортка Scaleform API (не імпортує oldskool).
-- `mods/configs/hpold/config.json`: конфігурація з відомими значеннями оригіналу.
-- `PORT_STATUS.md`: статус перевірки та обмеження.
+## Підключення незалежного UI
+`res/scripts/client/gui/mods/hpold_bridge.py` надає:
+```python
+from gui.mods.hpold_bridge import register_renderer
+register_renderer(your_renderer)
+```
+Адаптер `your_renderer` має реалізувати `create_field(name, definition)` і `update_field(name, vehicleID, text)`, за потреби `close()`.
 
-## Не плутати зі стабільним релізом
-Старий HP-мод постачав UI в `playersPanelAPI_modsCore.swf`, якого немає в його власному пакеті. Для незалежної роботи потрібен власний SWF і точні прив'язки HP-шкал до елементів панелі команд. У цьому репозиторії поки немає відтвореного SWF; отже вміст не слід встановлювати як готову версію. Також перевірки на запущеному клієнті 2.4.1 ще не було.
+**Без реального renderer/UI-адаптера шкали не з'являться.** Існуючий код не імпортує `gui.oldskool` і не використовує `playersPanelAPI_modsCore.swf`.
 
-## Вихідні архіви
-`playersPanelHP_1.2.4.zip` і `modscore.zip` надані окремо. Не комітимо старе ядро, захищений `.pyc` чи сторонні мережеві перевірки.
+## Стан
+Це інтеграційна основа. Перед релізом перевірити сигнатури у WoT 2.4.1, додати графічні ресурси `gui/hpbars`, зв'язати перенесений користувачем інтерфейс з bridge та протестувати бойовий `game.log`. Див. `PORT_STATUS.md`.
