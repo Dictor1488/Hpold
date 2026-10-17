@@ -1,15 +1,32 @@
-name: inq_hpold native AS3 test build
+name: Build and Release inq_hpold
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        default: '0.2.0-alpha1'
+        type: string
 permissions:
   contents: write
 jobs:
-  build:
+  build-and-release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $version = '0.2.0-alpha1'
+          if ("${{ github.event_name }}" -eq 'workflow_dispatch') {
+            $version = "${{ inputs.version }}".Trim()
+          } elseif ("${{ github.ref_type }}" -eq 'tag') {
+            $version = "${{ github.ref_name }}".TrimStart('v')
+          }
+          if ($version -notmatch '^[0-9]+(\.[0-9]+){2}([-.][a-zA-Z0-9.-]+)?
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -65,10 +82,43 @@ jobs:
         shell: pwsh
         run: |
           python build.py --python27 "$env:PYTHON27"
-      - name: Upload test artifact
+      - name: Verify WOTMOD
+        shell: pwsh
+        run: |
+          @'
+          import os, pathlib, zipfile
+          path=pathlib.Path('build')/('inq_hpold_'+os.environ['PROJECT_VERSION']+'.wotmod')
+          assert path.exists(), path
+          with zipfile.ZipFile(path) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert 'res/gui/flash/inq_hpold.swf' in names
+              assert 'res/scripts/client/gui/mods/mod_inq_hpold.pyc' in names
+              assert all(x.compress_type == zipfile.ZIP_STORED for x in z.infolist())
+              assert all(not name.endswith('.py') for name in names)
+              assert z.read('res/scripts/client/gui/mods/mod_inq_hpold.pyc')[:4] == bytes.fromhex('03f30d0a')
+          print('Verified',path,path.stat().st_size)
+          '@ | python -
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: inq_hpold-native-0.2.0-alpha1
-          path: build/*.wotmod
+          name: inq_hpold-${{ env.PROJECT_VERSION }}
+          path: build/inq_hpold_${{ env.PROJECT_VERSION }}.wotmod
           if-no-files-found: error
           compression-level: 0
+
+      - name: Publish GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.RELEASE_TAG }}
+          commit: ${{ github.sha }}
+          name: inq_hpold v${{ env.PROJECT_VERSION }}
+          artifacts: build/inq_hpold_${{ env.PROJECT_VERSION }}.wotmod
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          prerelease: true
+          makeLatest: false
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
