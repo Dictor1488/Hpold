@@ -20,7 +20,7 @@ package inq.hpold.battle
       private static const ColorblindAsset:Class;
 
       public static const BAR_WIDTH:Number = 72;
-      public static const TOTAL_WIDTH:Number = 96;
+      public static const TOTAL_WIDTH:Number = 110;
       public static const TOTAL_HEIGHT:Number = 18;
       private var _background:Bitmap;
       private var _fill:Bitmap;
@@ -43,12 +43,12 @@ package inq.hpold.battle
          _text.embedFonts = false;
          _text.selectable = false;
          _text.mouseEnabled = false;
-         _text.width = TOTAL_WIDTH;
+         _text.width = 100;
          _text.height = TOTAL_HEIGHT;
          _text.filters = [new DropShadowFilter(1, 90, 0x000000, 1, 2, 2, 2)];
-         _background.x = 14;
+         _background.x = 1;
          _background.y = 4;
-         _fill.x = 12;
+         _fill.x = 0;
          _fill.y = 3;
          addChild(_background);
          addChild(_fill);
@@ -88,14 +88,14 @@ package inq.hpold.battle
       {
          _background.visible = _showBar;
          _fill.visible = _showBar;
-         _text.text = _maximum > 0 ? String(_current) + "/" + String(_maximum) : "";
+         _text.text = (_maximum > 0 && _current > 0) ? String(_current) + "/" + String(_maximum) : "";
          if (_fill.parent == this)
             removeChild(_fill);
          if (_enemy)
             _fill = (_colorblind ? new ColorblindAsset() : new EnemyAsset()) as Bitmap;
          else
             _fill = new AllyAsset() as Bitmap;
-         _fill.x = 12;
+         _fill.x = 0;
          _fill.y = 3;
          _fill.scrollRect = null;
          if (_maximum > 0)
