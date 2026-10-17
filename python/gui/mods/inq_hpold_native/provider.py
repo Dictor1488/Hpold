@@ -169,7 +169,7 @@ class HealthProvider(object):
             self._subscribeArena()
             self._pushAll()
             self._applyVisibility(force=True)
-            self._schedulePoll(session)
+            # HP updates come from the native PlayersPanel hook.
             logger.info('inq_hpold provider started for %s vehicles', len(self._maxHealth))
         except Exception:
             logger.exception('inq_hpold provider start failed')
@@ -400,7 +400,6 @@ class HealthProvider(object):
     def _pushAll(self):
         if self._arena is None:
             return
-        g_events.setIconSettings(*g_settings.iconSettings())
         for vehicleID, maxHealth in self._maxHealth.items():
             g_events.setVehicleHealth(
                 vehicleID,
@@ -440,7 +439,7 @@ class HealthProvider(object):
                 g_events.refreshAll()
         except Exception:
             logger.exception('inq_hpold health poll failed')
-        self._schedulePoll(session)
+        # No arena poll: it could overwrite authoritative panel health.
 
 
 g_provider = HealthProvider()
@@ -482,6 +481,27 @@ def install_hooks():
         except Exception:
             logger.exception('inq_hpold key handler failed')
         return result
+
+    # Match the original mod's authoritative source for displayed health.
+    try:
+        from gui.Scaleform.daapi.view.battle.classic.players_panel import PlayersPanel
+        originalHealth = PlayersPanel.updateVehicleHealth
+        if not getattr(originalHealth, '_inq_hpold_hook', False):
+            def updateVehicleHealth(panel, vehicleID, newHealth, maxHealth):
+                result = originalHealth(panel, vehicleID, newHealth, maxHealth)
+                try:
+                    if maxHealth > 0:
+                        vehicleID = int(vehicleID)
+                        g_provider._health[vehicleID] = max(0, int(newHealth))
+                        g_provider._maxHealth[vehicleID] = int(maxHealth)
+                        g_events.setVehicleHealth(vehicleID, int(newHealth), int(maxHealth))
+                except Exception:
+                    logger.exception('Could not update panel HP')
+                return result
+            updateVehicleHealth._inq_hpold_hook = True
+            PlayersPanel.updateVehicleHealth = updateVehicleHealth
+    except Exception:
+        logger.exception('PlayersPanel native health hook is unavailable')
 
     PlayerAvatar.onBecomePlayer = patchedBecomePlayer
     PlayerAvatar.onBecomeNonPlayer = patchedBecomeNonPlayer
