@@ -2,12 +2,13 @@ name: Build and Release inq_hpold
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
         description: 'Release version'
         required: true
-        default: '0.2.0-alpha3'
+        default: '0.2.0'
         type: string
 permissions:
   contents: write
@@ -20,7 +21,7 @@ jobs:
       - name: Resolve version
         shell: pwsh
         run: |
-          $version = '0.2.0-alpha3'
+          $version = '0.2.0'
           if ("${{ github.event_name }}" -eq 'workflow_dispatch') {
             $version = "${{ inputs.version }}".Trim()
           } elseif ("${{ github.ref_type }}" -eq 'tag') {
@@ -128,7 +129,7 @@ jobs:
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
-          prerelease: true
-          makeLatest: false
+          prerelease: false
+          makeLatest: true
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
