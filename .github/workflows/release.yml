@@ -43,9 +43,9 @@ jobs:
           $root=Get-ChildItem "$env:RUNNER_TEMP\flex" -Recurse -Filter mxmlc.bat | Select-Object -First 1
           if (-not $root) {throw 'mxmlc not found'}
           "MXMLC=$($root.FullName)" >> $env:GITHUB_ENV
-          $home=Split-Path (Split-Path $root.FullName)
-          New-Item -ItemType Directory -Force "$home\frameworks\libs\player\32.0" | Out-Null
-          Copy-Item as3/libs/playerglobal.swc "$home\frameworks\libs\player\32.0\playerglobal.swc"
+          $flexHome=Split-Path (Split-Path $root.FullName)
+          New-Item -ItemType Directory -Force "$flexHome\frameworks\libs\player\32.0" | Out-Null
+          Copy-Item as3/libs/playerglobal.swc "$flexHome\frameworks\libs\player\32.0\playerglobal.swc"
       - name: Compile owned AS3 renderer
         shell: pwsh
         run: |
