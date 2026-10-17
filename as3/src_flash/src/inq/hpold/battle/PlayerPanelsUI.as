@@ -150,6 +150,7 @@ package inq.hpold.battle
             trace("[inq_hpold] placeRow " + vehicleID + ": " + e.message);
             return false;
          }
+         return false;
       }
 
       private function relayout(event:Event):void
