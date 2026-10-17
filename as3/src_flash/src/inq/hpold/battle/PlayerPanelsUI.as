@@ -189,6 +189,9 @@ package inq.hpold.battle
             trace("[inq_hpold] placeRow " + vehicleID + ": " + e.message);
             return false;
          }
+         // Older ASC/Flex control-flow analysis does not treat try/catch as
+         // exhaustive even though both branches above return a Boolean.
+         return false;
       }
 
       private function relayout(event:Event):void
