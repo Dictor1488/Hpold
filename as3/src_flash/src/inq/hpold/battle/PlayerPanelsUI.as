@@ -76,7 +76,7 @@ package inq.hpold.battle
          field.wordWrap = false;
          field.embedFonts = false;
          field.autoSize = TextFieldAutoSize.NONE;
-         record = {field: field, text: ""};
+         record = {field: field, text: "", renderedText: null, renderedSide: null};
          items[vehicleID] = record;
          return record;
       }
@@ -150,15 +150,21 @@ package inq.hpold.battle
          field.y = Math.round((anchor != null ? anchor.y : 0) + Number(side.y || 0));
          field.width = side.hasOwnProperty("width") ? Number(side.width) : 100;
          field.height = side.hasOwnProperty("height") ? Number(side.height) : 24;
-         var format:TextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF);
-         format.align = side.hasOwnProperty("align") ? String(side.align) : location.side;
-         field.defaultTextFormat = format;
-         field.filters = [new DropShadowFilter(0, 0, 0x000000, 0.9, 2, 2, 2, 1)];
-         if (config.isHtml)
-            field.htmlText = record.text;
-         else
-            field.text = record.text;
-         field.setTextFormat(format);
+         if (record.renderedText !== record.text || record.renderedSide !== location.side)
+         {
+            var format:TextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF);
+            format.align = side.hasOwnProperty("align") ? String(side.align) : location.side;
+            field.defaultTextFormat = format;
+            field.filters = [new DropShadowFilter(0, 0, 0x000000, 0.9, 2, 2, 2, 1)];
+            if (config.isHtml)
+               field.htmlText = record.text;
+            else
+               field.text = record.text;
+            // Do not call setTextFormat after setting htmlText: it rewrites
+            // formatting of the HTML field on every layout sync.
+            record.renderedText = record.text;
+            record.renderedSide = location.side;
+         }
          field.visible = item.visible && record.text != "";
       }
 
