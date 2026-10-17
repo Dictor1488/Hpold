@@ -23,17 +23,16 @@ jobs:
           $py=$paths | Where-Object {Test-Path $_} | Select-Object -First 1
           if (-not $py) {throw 'Python 2.7 not installed'}
           "PYTHON27=$py" >> $env:GITHUB_ENV
-      - name: Obtain private SWC SDK inputs
-        env:
-          HPE_ACCESS_TOKEN: ${{ secrets.HPE_ACCESS_TOKEN }}
+      - name: Prepare repository SWC libraries
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:HPE_ACCESS_TOKEN)) {
-            throw 'Set HPE_ACCESS_TOKEN repository secret with read-only access to Dictor1488/HpE'
-          }
-          git -c http.extraheader="AUTHORIZATION: basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:HPE_ACCESS_TOKEN")))" clone --depth 1 https://github.com/Dictor1488/HpE.git "$env:RUNNER_TEMP\hpereference"
+          $source = 'as3/src_flash/src/libs'
+          if (-not (Test-Path $source)) { throw 'Missing uploaded SDK libraries' }
           New-Item -ItemType Directory -Force as3/libs | Out-Null
-          Copy-Item "$env:RUNNER_TEMP\hpereference\as3\libs\*.swc" as3/libs/
+          Copy-Item "$source/*.swc" as3/libs/ -Force
+          $libs = @(Get-ChildItem as3/libs -Filter *.swc)
+          if ($libs.Count -lt 9) { throw "Expected 9 SWCs; found $($libs.Count)" }
+          Write-Host "Available SWCs: $($libs.Count)"
       - name: Download Flex SDK
         shell: pwsh
         run: |
