@@ -1,12 +1,10 @@
 package inq.hpold.battle
 {
    import flash.display.Bitmap;
-   import flash.display.BitmapData;
    import flash.display.Sprite;
    import flash.text.TextField;
    import flash.text.TextFormat;
    import flash.filters.DropShadowFilter;
-   import flash.geom.Rectangle;
 
    public class HealthRow extends Sprite
    {
@@ -30,6 +28,8 @@ package inq.hpold.battle
       private var _enemy:Boolean = false;
       private var _colorblind:Boolean = false;
       private var _showBar:Boolean = true;
+      private var _renderedEnemy:Boolean = false;
+      private var _renderedColorblind:Boolean = false;
 
       public function HealthRow()
       {
@@ -62,6 +62,8 @@ package inq.hpold.battle
 
       public function setShowBar(value:Boolean):void
       {
+         if (_showBar == value)
+            return;
          _showBar = value;
          redraw();
       }
@@ -74,39 +76,53 @@ package inq.hpold.battle
 
       public function setColorblind(value:Boolean):void
       {
+         if (_colorblind == value)
+            return;
          _colorblind = value;
          redraw();
       }
 
       public function updateHealth(currentHealth:int, maxHealth:int, enemy:Boolean):void
       {
-         _current = Math.max(0, currentHealth);
-         _maximum = Math.max(0, maxHealth);
+         var nextMaximum:int = Math.max(0, maxHealth);
+         var nextCurrent:int = Math.min(nextMaximum, Math.max(0, currentHealth));
+         if (_current == nextCurrent && _maximum == nextMaximum && _enemy == enemy)
+            return;
+         _current = nextCurrent;
+         _maximum = nextMaximum;
          _enemy = enemy;
          redraw();
       }
 
       private function redraw():void
       {
-         _background.visible = _showBar;
-         _fill.visible = _showBar;
-         _text.text = (_maximum > 0 && _current > 0) ? String(_current) + "/" + String(_maximum) : "";
-         if (_fill.parent == this)
-            removeChild(_fill);
-         if (_enemy)
-            _fill = (_colorblind ? new ColorblindAsset() : new EnemyAsset()) as Bitmap;
-         else
-            _fill = new AllyAsset() as Bitmap;
+         // OldSkool's original HTML draws the 72px image at a dynamically
+         // calculated width. Do not crop via scrollRect: it shifts bitmap
+         // coordinates and produces uneven HP fills.
+         if (_renderedEnemy != _enemy || _renderedColorblind != _colorblind)
+         {
+            var asset:Bitmap;
+            if (_enemy)
+               asset = (_colorblind ? new ColorblindAsset() : new EnemyAsset()) as Bitmap;
+            else
+               asset = new AllyAsset() as Bitmap;
+            _fill.bitmapData = asset.bitmapData;
+            _renderedEnemy = _enemy;
+            _renderedColorblind = _colorblind;
+         }
+
+         var ratio:Number = _maximum > 0
+            ? Math.max(0, Math.min(1, Number(_current) / Number(_maximum)))
+            : 0;
+         // Mirrors math.ceil(72 * currentHP / maxHP) in OldSkool's Python.
+         _fill.width = Math.ceil(BAR_WIDTH * ratio);
+         _fill.height = 14;
          _fill.x = 0;
          _fill.y = 3;
-         _fill.scrollRect = null;
-         if (_maximum > 0)
-         {
-            var ratio:Number = Math.max(0, Math.min(1, Number(_current) / Number(_maximum)));
-            _fill.scrollRect = new Rectangle(0, 0, Math.ceil(BAR_WIDTH * ratio), 14);
-         }
-         addChildAt(_fill, 1);
-         _fill.visible = _showBar;
+         _background.visible = _showBar;
+         _fill.visible = _showBar && _current > 0;
+         _text.text = (_maximum > 0 && _current > 0)
+            ? String(_current) + "/" + String(_maximum) : "";
       }
    }
 }
