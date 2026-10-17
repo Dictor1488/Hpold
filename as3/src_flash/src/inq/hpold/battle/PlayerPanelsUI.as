@@ -2,6 +2,7 @@ package inq.hpold.battle
 {
    import flash.display.DisplayObjectContainer;
    import flash.text.TextField;
+   import flash.text.TextFormat;
    import flash.utils.Dictionary;
    import inq.hpold.injector.BattleDisplayable;
 
@@ -94,9 +95,18 @@ package inq.hpold.battle
 
             var field:TextField = new TextField();
             field.visible = true;
-            field.height = Number(cfg.height);
-            field.width = Number(cfg.width);
+            // OldSkool configs omit dimensions on HP text labels.
+            // Number(undefined) makes the Flash TextField size NaN and hides text.
+            field.height = cfg.hasOwnProperty("height") ? Number(cfg.height) : 24;
+            field.width = cfg.hasOwnProperty("width") ? Number(cfg.width) : 100;
             field.selectable = false;
+            field.mouseEnabled = false;
+            field.wordWrap = false;
+            field.multiline = false;
+            field.embedFonts = false;
+            var format:TextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF);
+            format.align = cfg.hasOwnProperty("align") ? String(cfg.align) : side;
+            field.defaultTextFormat = format;
             field.x = Number(holder._listItem.vehicleIcon.x) +
                       (cfg.hasOwnProperty("x") ? Number(cfg.x) : 0);
             field.y = Number(holder._listItem.vehicleIcon.y) +
