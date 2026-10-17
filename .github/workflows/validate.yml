@@ -25,5 +25,6 @@ jobs:
           ]
           assert all((root/p).is_file() for p in expected)
           assert len(list((root/'python').rglob('*.py'))) == 1
+          compile((root/'python/gui/mods/mod_inq_hpold.py').read_text(encoding='utf-8'), 'mod_inq_hpold.py', 'exec')
           print('Native source files present:',len(expected))
           PY
