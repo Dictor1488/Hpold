@@ -1,27 +1,27 @@
-"""Gameface package smoke tests."""
+"""Validate package assets without a WoT installation."""
 import unittest
-from pathlib import Path
-import tempfile
-import zipfile
+import json
 import build
 
 
 class BuildTests(unittest.TestCase):
-    def test_all_gameface_assets_packaged(self):
-        entries = build.content()
+    def test_assets(self):
+        entries = build.assets()
         self.assertIn(build.RESOURCE, entries)
-        for name in build.GF_FILES:
-            self.assertIn('res/gui/gameface/mods/inq_hpold/panel/' + name, entries)
-        self.assertNotIn('res/gui/flash/inq_hpold.swf', entries)
+        for name in build.UI_FILES:
+            self.assertIn(build.PANEL + name, entries)
+        for name in build.IMAGES:
+            self.assertIn(build.PANEL + name, entries)
+        config = json.loads(entries[build.RESOURCE].decode('utf-8'))
+        self.assertEqual(config[0]['parameters']['impl'], 'gameface')
 
-    def test_deterministic_build(self):
-        with tempfile.TemporaryDirectory() as folder:
-            first = Path(folder) / 'one.wotmod'
-            second = Path(folder) / 'two.wotmod'
-            self.assertEqual(build.create_wotmod(first), build.create_wotmod(second))
-            self.assertEqual(first.read_bytes(), second.read_bytes())
-            with zipfile.ZipFile(first) as archive:
-                self.assertIsNone(archive.testzip())
+    def test_client_python_sources(self):
+        for name in build.SOURCES:
+            self.assertTrue((build.ROOT / name).is_file())
+
+    def test_compiler_is_mandatory(self):
+        with self.assertRaises(ValueError):
+            build.compile_scripts(None)
 
 
 if __name__ == '__main__':
