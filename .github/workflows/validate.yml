@@ -23,9 +23,8 @@ jobs:
             'as3/src_flash/src/inq/hpold/battle/HpPanel.as',
             'as3/src_flash/src/inq/hpold/battle/HealthRow.as',
             'python/gui/mods/mod_inq_hpold.py',
-            'python/gui/mods/inq_hpold_native/player_panel.py',
-            'python/gui/mods/inq_hpold_native/provider.py',
           ]
           assert all((root/p).is_file() for p in expected)
+          assert len(list((root/'python').rglob('*.py'))) == 1
           print('Native source files present:',len(expected))
           PY
