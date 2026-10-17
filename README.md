@@ -1,28 +1,21 @@
-# Hpold
+# inq_hpold
 
-Автономний порт OldSkool PlayersPanelHP 1.2.4 для World of Tanks **2.4.1**. Жодних імпортів `modsCore` у бойовому коді.
+Незалежний мод індикаторів HP для панелей команд World of Tanks 2.4.1.
 
-## Структура
-- `res/scripts/client/gui/mods/mod_hpold.py` — оригінальна логіка HP, hotkey, кеш, battle lifecycle.
-- `res/scripts/client/gui/mods/hpold_bridge.py` — самостійна Scaleform DAAPI інтеграція.
-- `hpbars/*.png` — чотири оригінальні іконки HP.
-- `build.py` — повторювана збірка з перевіркою вмісту архіву.
-- `mods/configs/hpold/config.json` — приклад конфігурації.
+## Файли
+- `res/scripts/client/gui/mods/mod_inq_hpold.py` — бойова логіка HP.
+- `res/scripts/client/gui/mods/inq_hpold_ui.py` — інтерфейсний адаптер.
+- `hpbars/*.png` — зображення індикаторів.
+- `assets/inq_hpold.swf` — **потрібний власний UI-компонент** (поки відсутній).
+- `mods/configs/inq_hpold/config.json` — конфігурація.
 
-## Build
-Знадобиться Python **3.8+** лише для збірки і вихідний `playersPanelHP_1.2.4.zip` (тільки **на етапі збірки**). Жоден Python-модуль старого ядра не потрапляє у вихідний файл.
-
+## Збірка
 ```bash
-python build.py --reference playersPanelHP_1.2.4.zip --check
-python build.py --reference playersPanelHP_1.2.4.zip
+python -m unittest discover -s tests -v
+python build.py --check
+python build.py
 ```
 
-Результат: `dist/hpold_0.1.0-rc1.wotmod`. Перенести його в `mods/2.4.1.0/`. За потреби приклад конфігурації окремо скопіювати в `mods/configs/hpold/config.json`.
+Готовий файл: `dist/inq_hpold_0.1.0-rc1.wotmod`. Збірка не використовує інші моди, архіви або мережеві завантаження. Якщо немає `assets/inq_hpold.swf`, збірка зупиняється з поясненням помилки.
 
-SWF-компонент `playersPanelAPI_modsCore.swf` фізично входить у WOTMOD; під час гри **окремого modsCore не потрібно**. Він залишається старим Flash-ресурсом, тому сумісність з 2.4.1 потребує перевірки.
-
-## Управління
-Ctrl + налаштована кнопка перемикає постійний показ / показ при натиснутому Alt. У репозиторному прикладі конфігурації кнопка `X` (keycode 88). Без зовнішнього JSON fallback — Ctrl+F12 за оригінальним кодом.
-
-## Статус
-**Release candidate (RC), не stable.** Збірка перевіряє файли, але не може замінити запуск в реальному клієнті: потрібні `game.log`, скріншот бойової панелі, перевірка Ctrl+X, Alt, початку/кінця бою. Не встановлювати разом зі старим PlayersPanelHP/modsCore, щоб уникнути дублювання елементів.
+**Стан:** UI-компонент ще необхідно створити та перевірити в клієнті 2.4.1, тому працездатний реліз наразі не підтверджений.
