@@ -14,10 +14,10 @@
 ```bash
 python -m unittest discover -s tests -v
 python build.py --check
-python build.py
+python build.py --python27 C:/Python27/python.exe
 ```
 
-Результат: `dist/inq_hpold_0.1.0-rc1.wotmod`. Для білда потрібен лише Python 3.8+.
+Результат: `build/inq_hpold_0.1.0-rc2.wotmod`. Для білда потрібен лише Python 3.8+.
 
 ## Важливо
 Це **дослідна Gameface-збірка**, ще не стабільний реліз. Точне позиціювання поверх штатних панелей, завантаження layout і сигнатури клієнта мають бути перевірені у грі. Gameface layout тепер знаходиться через штатний `gui.impl.gen.R`, без імпорту зовнішньої бібліотеки. Потрібно перевірити реєстрацію ресурсу в клієнті 2.4.1. Немає SWF, але твердження про повну runtime-незалежність поки передчасне.
