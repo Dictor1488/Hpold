@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = '0.1.0-rc2'
+VERSION = '0.1.0-rc3'
 SOURCES = (
     'res/scripts/client/gui/mods/mod_inq_hpold.py',
     'res/scripts/client/gui/mods/inq_hpold_ui.py',
