@@ -1,6 +1,6 @@
 package
 {
-   import inq.hpold.battle.HpPanel;
+   import inq.hpold.battle.PlayerPanelsUI;
    import inq.hpold.injector.AbstractViewInjector;
    import inq.hpold.injector.IAbstractInjector;
 
@@ -13,12 +13,12 @@ package
 
       override public function get componentUI():Class
       {
-         return HpPanel;
+         return PlayerPanelsUI;
       }
 
       override public function get componentName():String
       {
-         return "inqHpoldPanel";
+         return "PlayerPanelsUI";
       }
    }
 }
