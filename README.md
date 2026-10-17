@@ -1,17 +1,16 @@
 # inq_hpold
 
-HP-індикатори з прив'язкою до фактичних рядків штатної панелі World of Tanks 2.4.1.
+Самостійний HP-індикатор для командних панелей WoT 2.4.1.
 
-## Архітектура
-- Python 2.7: `python/gui/mods/mod_inq_hpold.py`, `python/gui/mods/inq_hpold_native/`.
-- ActionScript 3: `as3/src_flash/src/InqHpoldPanel.as`, `as3/src_flash/src/inq/hpold/`.
-- Власний `inq_hpold.swf` компілюється під час складання й включається безпосередньо у власний `.wotmod`.
-- HP прив'язується до `playersPanel` через `getHolderByVehicleID` і `vehicleIcon/vehicleTF`, а не за статичними координатами Gameface.
-- Окремого Python-ядра не потрібно.
+- `python/gui/mods/` — Python 2.7: HP, бойові події й передача даних.
+- `as3/src_flash/src/` — AS3: прив’язка HP до рядка танка та відображення оригінальних шкал.
+- `as3/libs/` — дев’ять SWC-бібліотек для компіляції.
+- `hpbars/` — чотири оригінальні PNG.
+- `build.py` — збірка ZIP_STORED WOTMOD.
+- `.github/workflows/release.yml` — автоматична збірка.
 
-## Важливо для збірки
-9 SWC-бібліотек уже завантажені в `as3/src_flash/src/libs/`. Workflow копіює їх до `as3/libs/` перед компіляцією, без GitHub-токена до інших репозиторіїв.
+Не використовуються Gameface, додаткове ядро або функції фарбування іконок танків. SWF компілюється з коду в репозиторії та входить до WOTMOD.
 
-Запустити GitHub Actions → **inq_hpold native AS3 test build** → Run workflow. При успішній компіляції файл буде доступний у Actions → Artifacts як `inq_hpold-native-0.2.0-alpha1`.
+**Для тестування**: GitHub Actions → Build and Release → Artifacts або GitHub Releases (коли релізний workflow успішно завершено). Видаляйте старі версії `inq_hpold` перед запуском.
 
-**Новий тестовий SWF/WOTMOD ще не зібраний.** Попередні RC2/RC3 залишаються Gameface-версіями з відомою проблемою позиціювання; для тесту нового AS3 потрібен саме артефакт 0.2.0-alpha1.
+Роботу в реальному бою ще необхідно перевіряти за скріншотом і `game.log`.
