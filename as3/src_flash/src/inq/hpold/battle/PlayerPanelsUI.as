@@ -152,10 +152,13 @@ package inq.hpold.battle
          field.height = side.hasOwnProperty("height") ? Number(side.height) : 24;
          if (record.renderedText !== record.text || record.renderedSide !== location.side)
          {
-            var format:TextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF);
+            var isHpText:Boolean = linkage == "HPbars_1text";
+            var format:TextFormat = new TextFormat("$FieldFont", isHpText ? 12 : 11, 0xFFFFFF, isHpText);
             format.align = side.hasOwnProperty("align") ? String(side.align) : location.side;
             field.defaultTextFormat = format;
-            field.filters = [new DropShadowFilter(0, 0, 0x000000, 0.9, 2, 2, 2, 1)];
+            field.filters = isHpText
+               ? [new DropShadowFilter(1, 90, 0x000000, 1, 2, 2, 2, 1)]
+               : [];
             if (config.isHtml)
                field.htmlText = record.text;
             else
