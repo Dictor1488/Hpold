@@ -1,27 +1,66 @@
 # -*- coding: utf-8 -*-
-"""Hpold UI boundary.
+"""Hpold independent interface contract.
 
-This module is deliberately independent from modsCore. The original interface
-uses a proprietary SWF (playersPanelAPI_modsCore.swf). Until a replacement view
-and its binding are implemented, this bridge buffers state without claiming
-that it is visually rendering HP bars.
+UI implementation must call register_renderer(renderer) with an object
+implementing create_field(name, definition), update_field(name, vehicleID, text),
+and optionally close(). No dependency on OldSkool.
 """
+_renderer = None
+_active_bridges = []
+
+
+def register_renderer(renderer):
+    global _renderer
+    _renderer = renderer
+    for bridge in list(_active_bridges):
+        bridge._create_fields()
+        bridge.flush()
+
+
+def unregister_renderer(renderer):
+    global _renderer
+    if _renderer is renderer:
+        _renderer = None
+
+
 class Bridge(object):
     def __init__(self):
         self._open = False
-        self._values = {}
-        self._mode = 0
+        self._templates = {}
+        self._state = {}
 
-    def open(self):
+    def open(self, templates=None):
         self._open = True
+        self._templates = templates or {}
+        if self not in _active_bridges:
+            _active_bridges.append(self)
+        self._create_fields()
+
+    def _create_fields(self):
+        if not self._open or _renderer is None:
+            return
+        for name, definition in sorted(self._templates.iteritems()):
+            _renderer.create_field('HPbars_' + name, definition)
+
+    def update_vehicle(self, vehicleID, side, fields):
+        if not self._open:
+            return
+        self._state[vehicleID] = (side, dict(fields))
+        if _renderer is not None:
+            for field, text in fields.iteritems():
+                _renderer.update_field(field, vehicleID, text)
+
+    def flush(self):
+        if not self._open or _renderer is None:
+            return
+        for vehicleID, pair in self._state.iteritems():
+            for field, text in pair[1].iteritems():
+                _renderer.update_field(field, vehicleID, text)
 
     def close(self):
+        if self in _active_bridges:
+            _active_bridges.remove(self)
         self._open = False
-        self._values.clear()
-
-    def set_mode(self, value):
-        self._mode = int(value)
-
-    def update(self, snapshot):
-        if self._open:
-            self._values = dict(snapshot)
+        self._state.clear()
+        if _renderer is not None and hasattr(_renderer, 'close'):
+            _renderer.close()
