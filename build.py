@@ -13,27 +13,26 @@ SCRIPT_PATHS = (
     'res/scripts/client/gui/mods/inq_hpold_ui.py',
 )
 IMAGE_NAMES = ('hp_alive_cb.png', 'hp_alive_l.png', 'hp_alive_r.png', 'hp_bg.png')
-UI_ASSET = ROOT / 'assets' / 'inq_hpold.swf'
-UI_DEST = 'res/gui/flash/inq_hpold.swf'
+GF_DIR = ROOT / 'res/gui/gameface/mods/inq_hpold/panel'
+GF_FILES = ('Panel.html', 'Panel.css', 'Panel.js')
+RESOURCE = 'res/gui/gen_resources/tv.inq.hpold.json'
 
 
 def content():
-    if not UI_ASSET.is_file():
-        raise FileNotFoundError(
-            'Missing independent UI asset assets/inq_hpold.swf. '
-            'No external UI will be substituted.'
-        )
-    swf = UI_ASSET.read_bytes()
-    if swf[:3] not in (b'FWS', b'CWS', b'ZWS'):
-        raise ValueError('Invalid inq_hpold.swf')
-    entries = {UI_DEST: swf}
+    entries = {}
+    for name in GF_FILES:
+        source = GF_DIR / name
+        if not source.is_file():
+            raise FileNotFoundError('Missing Gameface file: ' + str(source))
+        entries['res/gui/gameface/mods/inq_hpold/panel/' + name] = source.read_bytes()
+    entries[RESOURCE] = (ROOT / RESOURCE).read_bytes()
     for name in SCRIPT_PATHS:
         entries[name] = (ROOT / name).read_bytes()
     for name in IMAGE_NAMES:
         data = (ROOT / 'hpbars' / name).read_bytes()
         if not data.startswith(b'\x89PNG\r\n\x1a\n'):
             raise ValueError('Invalid PNG: ' + name)
-        entries['res/gui/hpbars/' + name] = data
+        entries['res/gui/gameface/mods/inq_hpold/panel/' + name] = data
     metadata = ('<root><id>inq_hpold</id><version>%s</version>'
                 '<name>inq_hpold</name>'
                 '<description>Players panel HP indicators</description></root>' % VERSION).encode('utf-8')
