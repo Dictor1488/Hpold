@@ -1,23 +1,17 @@
 # inq_hpold
 
-Незалежний мод HP-індикаторів у панелях команд World of Tanks 2.4.1.
+HP-індикатори з прив'язкою до фактичних рядків штатної панелі World of Tanks 2.4.1.
 
-## Файли
-- `res/scripts/client/gui/mods/mod_inq_hpold.py` — збір даних HP, режими відображення й обробка клавіш.
-- `res/scripts/client/gui/mods/inq_hpold_ui.py` — Wulf/Gameface view і передавання стану.
-- `res/gui/gameface/mods/inq_hpold/panel/Panel.html`, `Panel.css`, `Panel.js` — візуал шкал.
-- `res/gui/gen_resources/tv.inq.hpold.json` — Gameface layout.
-- `hpbars/*.png` — графічні елементи.
-- `mods/configs/inq_hpold/config.json` — конфігурація.
+## Архітектура
+- Python 2.7: `python/gui/mods/mod_inq_hpold.py`, `python/gui/mods/inq_hpold_native/`.
+- ActionScript 3: `as3/src_flash/src/InqHpoldPanel.as`, `as3/src_flash/src/inq/hpold/`.
+- Власний `inq_hpold.swf` компілюється під час складання й включається безпосередньо у власний `.wotmod`.
+- HP прив'язується до `playersPanel` через `getHolderByVehicleID` і `vehicleIcon/vehicleTF`, а не за статичними координатами Gameface.
+- Окремого Python-ядра не потрібно.
 
-## Збірка
-```bash
-python -m unittest discover -s tests -v
-python build.py --check
-python build.py --python27 C:/Python27/python.exe
-```
+## Важливо для збірки
+`as3/libs/*.swc` відсутні в цьому репозиторії. Необхідно надати вихідні бібліотеки з іншого власного репозиторію через GitHub Actions secret `HPE_ACCESS_TOKEN` (токен лише з read-доступом до приватного `Dictor1488/HpE`) або додати SDK у `as3/libs` та змінити workflow на локальні бібліотеки.
 
-Результат: `build/inq_hpold_0.1.0-rc2.wotmod`. Для білда потрібен лише Python 3.8+.
+Потім запустити GitHub Actions → **inq_hpold native AS3 test build** → Run workflow. При успішній компіляції файл буде доступний у Actions → Artifacts як `inq_hpold-native-0.2.0-alpha1`.
 
-## Важливо
-Це **дослідна Gameface-збірка**, ще не стабільний реліз. Точне позиціювання поверх штатних панелей, завантаження layout і сигнатури клієнта мають бути перевірені у грі. Gameface layout тепер знаходиться через штатний `gui.impl.gen.R`, без імпорту зовнішньої бібліотеки. Потрібно перевірити реєстрацію ресурсу в клієнті 2.4.1. Немає SWF, але твердження про повну runtime-незалежність поки передчасне.
+**Новий тестовий SWF/WOTMOD ще не зібраний.** Попередні RC2/RC3 залишаються Gameface-версіями з відомою проблемою позиціювання; для тесту нового AS3 потрібен саме артефакт 0.2.0-alpha1.
