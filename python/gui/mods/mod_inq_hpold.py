@@ -297,7 +297,7 @@ class inq_hpoldSettings(object):
         if self._uiHooked:
             return
         try:
-                        g_events.onUIReady += self._applyDisplayToFlash
+            g_events.onUIReady += self._applyDisplayToFlash
             self._uiHooked = True
         except Exception:
             logger.exception('inq_hpold UI settings callback failed')
@@ -305,7 +305,7 @@ class inq_hpoldSettings(object):
     def finalize(self):
         if self._uiHooked:
             try:
-                                g_events.onUIReady -= self._applyDisplayToFlash
+                        g_events.onUIReady -= self._applyDisplayToFlash
             except Exception:
                 pass
         self._uiHooked = False
@@ -319,7 +319,7 @@ class inq_hpoldSettings(object):
 
     def _applyDisplayToFlash(self, *args):
         try:
-                        g_events.setDisplaySettings(*self.displaySettings())
+            g_events.setDisplaySettings(*self.displaySettings())
         except Exception:
             logger.exception('inq_hpold display settings failed')
 
@@ -329,7 +329,7 @@ class inq_hpoldSettings(object):
         self._apply(newSettings)
         self._applyDisplayToFlash()
         try:
-                        g_provider.applySettings()
+            g_provider.applySettings()
         except Exception:
             logger.exception('inq_hpold applying settings failed')
 
