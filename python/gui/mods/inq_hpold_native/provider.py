@@ -358,7 +358,15 @@ class HealthProvider(object):
                 self._vehicleClass[vehicleID] = self._getVehicleClass(vehicleData)
             except Exception:
                 return
-        self._health[vehicleID] = min(maxHealth, newHealth)
+        nextHealth = min(maxHealth, newHealth)
+        # Arena event values may lag behind the native panel callback.
+        # In a standard battle health cannot spontaneously increase.
+        previousHealth = self._health.get(vehicleID)
+        if previousHealth is not None and nextHealth > previousHealth:
+            return
+        if previousHealth == nextHealth:
+            return
+        self._health[vehicleID] = nextHealth
         g_events.setVehicleHealth(
             vehicleID,
             self._health[vehicleID],
@@ -383,9 +391,23 @@ class HealthProvider(object):
             )
 
     def _onVehicleListChanged(self, *args):
+        # Arena vehicle-list notifications are not health snapshots. Rebuilding
+        # from arena.vehicles resets damaged tanks to their spawn HP.
         try:
-            self._buildInitialState()
-            self._pushAll()
+            for vehicleID, vehicleData in self._arena.vehicles.items():
+                vehicleID = int(vehicleID)
+                if vehicleID in self._maxHealth:
+                    continue
+                maximum = self._getMaxHealth(vehicleData)
+                if maximum <= 0:
+                    continue
+                self._maxHealth[vehicleID] = maximum
+                self._health[vehicleID] = min(
+                    maximum, self._readCurrentHealth(vehicleID, maximum))
+                self._vehicleClass[vehicleID] = self._getVehicleClass(vehicleData)
+                g_events.setVehicleHealth(
+                    vehicleID, self._health[vehicleID], maximum,
+                    self._classForVehicle(vehicleID))
         except Exception:
             logger.exception('Vehicle list refresh failed')
 
@@ -417,6 +439,10 @@ class HealthProvider(object):
                 return
             current = min(maximum, current)
             previous = (self._health.get(vehicleID), self._maxHealth.get(vehicleID))
+            # Ignore an out-of-order full-health callback after damage.
+            # A new battle resets the cache in start()/stop().
+            if (previous[0] is not None and current > previous[0]):
+                return
             self._health[vehicleID] = current
             self._maxHealth[vehicleID] = maximum
             if previous != (current, maximum):
