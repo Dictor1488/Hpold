@@ -11,6 +11,7 @@ The only reused core component is the small Scaleform UI SWF.
 import argparse
 import hashlib
 import io
+import re
 from pathlib import Path
 import sys
 import zipfile
@@ -56,9 +57,15 @@ def content(reference):
     ).encode('utf-8')
     ET.fromstring(metadata)
     entries['meta.xml'] = metadata
+    # Match only actual import statements, not documentation or comments.
+    # Runtime scripts are Python 2.7, so Python 3's ast.parse cannot parse them.
+    forbidden_import = re.compile(
+        rb'^\\s*(?:from\\s+(?:gui\\.)?oldskool(?:\\.|\\s+)|'
+        rb'import\\s+(?:gui\\.)?oldskool(?:\\.|\\s|$))',
+        re.MULTILINE
+    )
     for name in PY_PATHS:
-        source = entries[name]
-        if b'gui.oldskool' in source or b'from oldskool' in source:
+        if forbidden_import.search(entries[name]):
             raise ValueError('Unexpected OldSkool dependency in ' + name)
     return entries
 
