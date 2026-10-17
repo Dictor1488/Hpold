@@ -146,18 +146,21 @@ package inq.hpold.battle
          var vehicleTF:DisplayObject = getMember(item, "vehicleTF") as DisplayObject;
          var anchor:DisplayObject = icon != null ? icon : vehicleTF;
          // OldSkool API offsets are relative to the vehicle icon's position.
-         field.x = Math.round((anchor != null ? anchor.x : 0) + Number(side.x || 0));
+         field.x = Math.round((anchor != null ? anchor.x : 0) + Number(side.x || 0) + (location.side == "left" ? 4 : 0));
          field.y = Math.round((anchor != null ? anchor.y : 0) + Number(side.y || 0));
          field.width = side.hasOwnProperty("width") ? Number(side.width) : 100;
          field.height = side.hasOwnProperty("height") ? Number(side.height) : 24;
+         // Scale the three OldSkool field layers together, maintaining alignment.
+         field.scaleX = 0.75;
+         field.scaleY = 0.85;
          if (record.renderedText !== record.text || record.renderedSide !== location.side)
          {
             var isHpText:Boolean = linkage == "HPbars_1text";
-            var format:TextFormat = new TextFormat("$FieldFont", isHpText ? 12 : 11, 0xFFFFFF, isHpText);
+            var format:TextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF, false);
             format.align = side.hasOwnProperty("align") ? String(side.align) : location.side;
             field.defaultTextFormat = format;
             field.filters = isHpText
-               ? [new DropShadowFilter(1, 90, 0x000000, 1, 2, 2, 2, 1)]
+               ? [new DropShadowFilter(1, 90, 0x000000, 0.85, 1, 1, 1, 1)]
                : [];
             if (config.isHtml)
                field.htmlText = record.text;
