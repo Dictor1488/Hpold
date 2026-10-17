@@ -297,11 +297,10 @@ class HealthProvider(object):
                 maxHealth = self._getMaxHealth(vehicleData)
                 if maxHealth <= 0:
                     continue
-                current = self._readCurrentHealth(vehicleID, maxHealth)
-                current = min(maxHealth, current)
                 self._maxHealth[vehicleID] = maxHealth
-                self._health[vehicleID] = current
-                self._vehicleClass[vehicleID] = self._getVehicleClass(vehicleData)
+                # Do not invent a full HP value for unseen vehicles.
+                # Await real native panel or arena health updates.
+                self._vehicleClass[vehicleID] = ''
             except Exception:
                 logger.exception('Failed to initialize vehicle %s', vehicleID)
 
@@ -401,9 +400,11 @@ class HealthProvider(object):
         if self._arena is None:
             return
         for vehicleID, maxHealth in self._maxHealth.items():
+            if vehicleID not in self._health:
+                continue
             g_events.setVehicleHealth(
                 vehicleID,
-                self._health.get(vehicleID, maxHealth),
+                self._health[vehicleID],
                 maxHealth,
                 self._classForVehicle(vehicleID)
             )
