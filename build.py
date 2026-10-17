@@ -1,61 +1,104 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Build independent Hpold .wotmod using original visual assets.
+"""Build the standalone Hpold WOTMOD (no OldSkool Python runtime).
 
-Usage:
-  python build.py --reference playersPanelHP_1.2.4.zip --version 2.4.1.0
+python build.py --reference /path/to/playersPanelHP_1.2.4.zip
+python build.py --reference /path/to/playersPanelHP_1.2.4.zip --check
 
-The reference ZIP is used ONLY at build time to extract the original
-players-panel injector SWF; it is NOT bundled with modsCore Python code.
-No third-party core is required at game runtime.
+The reference is an INPUT to the build process, not a dependency in game.
+The only reused core component is the small Scaleform UI SWF.
 """
 import argparse
+import hashlib
 import io
-import os
+from pathlib import Path
+import sys
 import zipfile
 import xml.etree.ElementTree as ET
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-SCRIPT_NAMES = ('mod_hpold.py', 'hpold_bridge.py')
-SWF = 'res/gui/flash/playersPanelAPI_modsCore.swf'
+ROOT = Path(__file__).resolve().parent
+VERSION = '0.1.0-rc1'
+NAMES = ('hp_alive_cb.png', 'hp_alive_l.png', 'hp_alive_r.png', 'hp_bg.png')
+SWF_PATH = 'res/gui/flash/playersPanelAPI_modsCore.swf'
+PY_PATHS = (
+    'res/scripts/client/gui/mods/mod_hpold.py',
+    'res/scripts/client/gui/mods/hpold_bridge.py',
+)
 
 
-def original_swf(path):
-    with zipfile.ZipFile(path) as outer:
-        core = next((n for n in outer.namelist()
-                     if n.endswith('/oldskool.modscore_1.4.1.wotmod')), None)
-        if core is None:
-            raise RuntimeError('Original modsCore wotmod missing from reference')
-        with zipfile.ZipFile(io.BytesIO(outer.read(core))) as inner:
-            return inner.read(SWF)
+def get_swf(reference):
+    with zipfile.ZipFile(reference) as z:
+        candidates = [name for name in z.namelist()
+                      if name.endswith('/oldskool.modscore_1.4.1.wotmod')]
+        if len(candidates) != 1:
+            raise ValueError('Expected exactly one oldskool.modscore_1.4.1.wotmod')
+        with zipfile.ZipFile(io.BytesIO(z.read(candidates[0]))) as core:
+            swf = core.read(SWF_PATH)
+    if swf[:3] not in (b'FWS', b'CWS', b'ZWS'):
+        raise ValueError('Invalid player-panel SWF signature')
+    return swf
 
 
-def build(reference, version, output):
-    swf = original_swf(reference)
-    meta = ('<root><id>hpold</id><version>0.1.0</version>'
-            '<name>Hpold Independent HP Bars</name>'
-            '<description>Standalone PlayersPanel HP Bars</description></root>')
-    ET.fromstring(meta)
-    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as dest:
-        dest.writestr('meta.xml', meta)
-        dest.writestr(SWF, swf)
-        for name in SCRIPT_NAMES:
-            src = os.path.join(ROOT, 'res', 'scripts', 'client', 'gui', 'mods', name)
-            dest.write(src, 'res/scripts/client/gui/mods/' + name)
-        for name in ('hp_alive_cb.png', 'hp_alive_l.png', 'hp_alive_r.png', 'hp_bg.png'):
-            src = os.path.join(ROOT, 'hpbars', name)
-            dest.write(src, 'res/gui/hpbars/' + name)
-    with zipfile.ZipFile(output) as check:
-        assert check.testzip() is None
-        assert SWF in check.namelist()
+def content(reference):
+    entries = {SWF_PATH: get_swf(reference)}
+    for relative in PY_PATHS:
+        entries[relative] = (ROOT / relative).read_bytes()
+    for png in NAMES:
+        blob = (ROOT / 'hpbars' / png).read_bytes()
+        if not blob.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError('Invalid PNG: ' + png)
+        entries['res/gui/hpbars/' + png] = blob
+    metadata = (
+        '<root><id>hpold</id><version>%s</version>'
+        '<name>Hpold - Players Panel HP</name>'
+        '<description>Standalone HP bars; independent of modsCore</description>'
+        '</root>' % VERSION
+    ).encode('utf-8')
+    ET.fromstring(metadata)
+    entries['meta.xml'] = metadata
+    for name in PY_PATHS:
+        source = entries[name]
+        if b'gui.oldskool' in source or b'from oldskool' in source:
+            raise ValueError('Unexpected OldSkool dependency in ' + name)
+    return entries
+
+
+def create_wotmod(reference, output):
+    entries = content(reference)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(str(output), 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for name in sorted(entries):
+            zi = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o644 << 16
+            archive.writestr(zi, entries[name], compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+    with zipfile.ZipFile(str(output)) as archive:
+        assert archive.testzip() is None
+        assert sorted(archive.namelist()) == sorted(entries)
+        for name, blob in entries.items():
+            assert archive.read(name) == blob, name
+    sha = hashlib.sha256(output.read_bytes()).hexdigest()
     print('Built:', output)
-    print('Copy .wotmod into mods/%s/ of the WoT client.' % version)
+    print('SHA256:', sha)
+    print('Files:', len(entries))
+    print('Install into WoT mods/2.4.1.0/')
+    return sha
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--reference', required=True)
-    parser.add_argument('--version', default='2.4.1.0')
-    parser.add_argument('--output', default='hpold_0.1.0.wotmod')
-    opts = parser.parse_args()
-    build(opts.reference, opts.version, opts.output)
+    parser.add_argument('--reference', required=True, type=Path)
+    parser.add_argument('--output', type=Path,
+                        default=ROOT / 'dist' / ('hpold_' + VERSION + '.wotmod'))
+    parser.add_argument('--check', action='store_true',
+                        help='validate inputs without creating an artifact')
+    args = parser.parse_args()
+    try:
+        if args.check:
+            entries = content(args.reference)
+            print('Inputs validated:', len(entries), 'files')
+        else:
+            create_wotmod(args.reference, args.output)
+    except (ValueError, OSError, KeyError, zipfile.BadZipFile) as exc:
+        print('BUILD FAILED:', exc, file=sys.stderr)
+        sys.exit(1)
