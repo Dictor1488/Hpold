@@ -1,5 +1,7 @@
 name: inq_hpold native AS3 test build
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: write
