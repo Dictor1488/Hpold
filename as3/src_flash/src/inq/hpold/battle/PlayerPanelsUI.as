@@ -1,131 +1,165 @@
 package inq.hpold.battle
 {
+   import flash.display.DisplayObject;
    import flash.display.DisplayObjectContainer;
+   import flash.display.Shape;
+   import flash.display.Sprite;
+   import flash.events.Event;
+   import flash.filters.DropShadowFilter;
    import flash.text.TextField;
    import flash.text.TextFormat;
    import flash.utils.Dictionary;
    import inq.hpold.injector.BattleDisplayable;
 
    /**
-    * Source reconstruction from the AVM2 bytecode in
-    * playersPanelAPI_modsCore.swf (OldSkool).
-    *
-    * The original draws no shapes, does not scale labels and does not
-    * reflow the fields each frame. Every field is attached directly to
-    * the corresponding player panel list item, above vehicleTF.
+    * Independent HP bars. No OldSkool SWF, HTML images or bitmap scaling.
+    * One row per vehicle: painted background, HP fill and centered label.
     */
    public class PlayerPanelsUI extends BattleDisplayable
    {
-      private var configs:Object = {};
-      private var textFields:Object = {};
+      private static const WIDTH:Number = 84;
+      private static const HEIGHT:Number = 16;
+      private var _rows:Dictionary = new Dictionary();
 
       public function PlayerPanelsUI()
       {
          super();
+         addEventListener(Event.ENTER_FRAME, relayout);
       }
 
       public function as_create(linkage:String, kind:String, config:Object):void
       {
-         if (linkage == null || config == null || kind != "Label")
-            return;
-         configs[linkage] = config;
-         if (!textFields.hasOwnProperty(linkage))
-            textFields[linkage] = {};
+         // Retained for the DAAPI contract; rows are created by as_update.
       }
 
       public function as_update(linkage:String, data:Object):void
       {
-         if (!textFields.hasOwnProperty(linkage) || data == null ||
-             !data.hasOwnProperty("vehicleID"))
+         if (linkage != "hp_row" || data == null || !data.hasOwnProperty("vehicleID"))
             return;
-
-         var entries:Object = textFields[linkage];
-         var vehicleID:String = String(data.vehicleID);
-         if (!entries.hasOwnProperty(vehicleID))
-            _createTextField(linkage, data);
-         if (!entries.hasOwnProperty(vehicleID))
-            return;
-
-         var field:TextField = entries[vehicleID] as TextField;
-         if (configs[linkage].isHtml)
-            field.htmlText = String(data.text);
-         else
-            field.text = String(data.text);
+         var id:int = int(data.vehicleID);
+         var row:Sprite = _rows[id] as Sprite;
+         if (row == null)
+         {
+            row = makeRow();
+            _rows[id] = row;
+         }
+         row.visible = Boolean(data.visible) && Number(data.maximum) > 0 &&
+                       Number(data.current) > 0;
+         var current:int = Math.max(0, int(data.current));
+         var maximum:int = Math.max(1, int(data.maximum));
+         var ratio:Number = Math.max(0, Math.min(1, Number(current) / maximum));
+         var fill:Shape = row.getChildByName("fill") as Shape;
+         var label:TextField = row.getChildByName("hpLabel") as TextField;
+         var enemy:Boolean = placeRow(id, row);
+         fill.graphics.clear();
+         if (Boolean(data.showBar))
+         {
+            fill.graphics.beginFill(enemy ? 0xCF3934 : 0x6DBB38);
+            fill.graphics.drawRoundRect(1, 1, (WIDTH - 2) * ratio, HEIGHT - 2, 3, 3);
+            fill.graphics.endFill();
+         }
+         label.text = current + "/" + maximum;
       }
 
       public function as_delete(linkage:String):void
       {
-         if (!textFields.hasOwnProperty(linkage))
+         if (linkage != "hp_row")
             return;
-         var entries:Object = textFields[linkage];
-         for (var vehicleID:String in entries)
+         for (var id:* in _rows)
          {
-            var field:TextField = entries[vehicleID] as TextField;
-            if (field != null && field.parent != null)
-               field.parent.removeChild(field);
+            var row:Sprite = _rows[id] as Sprite;
+            if (row && row.parent)
+               row.parent.removeChild(row);
+            delete _rows[id];
          }
-         delete textFields[linkage];
-         delete configs[linkage];
       }
 
-      private function _createTextField(linkage:String, data:Object):void
+      private function makeRow():Sprite
+      {
+         var row:Sprite = new Sprite();
+         row.mouseEnabled = false;
+         row.mouseChildren = false;
+         var background:Shape = new Shape();
+         background.graphics.beginFill(0x111A19, 0.92);
+         background.graphics.drawRoundRect(0, 0, WIDTH, HEIGHT, 4, 4);
+         background.graphics.endFill();
+         background.graphics.lineStyle(1, 0x000000, 0.65);
+         background.graphics.drawRoundRect(0.5, 0.5, WIDTH - 1, HEIGHT - 1, 4, 4);
+         row.addChild(background);
+         var fill:Shape = new Shape();
+         fill.name = "fill";
+         row.addChild(fill);
+         var label:TextField = new TextField();
+         label.name = "hpLabel";
+         label.defaultTextFormat = new TextFormat("Arial", 11, 0xFFFFFF, true, null, null, null, null, "center");
+         label.width = WIDTH;
+         label.height = 20;
+         label.x = 0;
+         label.y = -2;
+         label.selectable = false;
+         label.mouseEnabled = false;
+         label.wordWrap = false;
+         label.filters = [new DropShadowFilter(1, 90, 0, 1, 2, 2, 2)];
+         row.addChild(label);
+         return row;
+      }
+
+      private function placeRow(vehicleID:int, row:Sprite):Boolean
       {
          try
          {
-            if (battlePage == null || !battlePage.hasOwnProperty("playersPanel") ||
-                !configs.hasOwnProperty(linkage))
-               return;
-
+            if (battlePage == null)
+               return false;
             var panel:* = battlePage["playersPanel"];
-            var holder:* = panel.listLeft.getHolderByVehicleID(data["vehicleID"]);
-            var side:String = "left";
+            if (panel == null)
+               return false;
+            var holder:* = panel.listLeft.getHolderByVehicleID(vehicleID);
+            var enemy:Boolean = false;
             if (holder == null)
             {
-               side = "right";
-               holder = panel.listRight.getHolderByVehicleID(data["vehicleID"]);
+               holder = panel.listRight.getHolderByVehicleID(vehicleID);
+               enemy = true;
             }
-            if (holder == null || !configs[linkage].hasOwnProperty(side))
-               return;
-
-            var cfg:Object = configs[linkage][side];
+            if (holder == null || holder._listItem == null)
+            {
+               row.visible = false;
+               return enemy;
+            }
             var item:DisplayObjectContainer = holder._listItem as DisplayObjectContainer;
-            if (item == null || holder._listItem.vehicleIcon == null ||
-                holder._listItem.vehicleTF == null)
-               return;
-
-            var field:TextField = new TextField();
-            field.visible = true;
-            // OldSkool configs omit dimensions on HP text labels.
-            // Number(undefined) makes the Flash TextField size NaN and hides text.
-            field.height = cfg.hasOwnProperty("height") ? Number(cfg.height) : 24;
-            field.width = cfg.hasOwnProperty("width") ? Number(cfg.width) : 100;
-            field.selectable = false;
-            field.mouseEnabled = false;
-            field.wordWrap = false;
-            field.multiline = false;
-            field.embedFonts = false;
-            var format:TextFormat = new TextFormat("$FieldFont", 11, 0xFFFFFF);
-            format.align = cfg.hasOwnProperty("align") ? String(cfg.align) : side;
-            field.defaultTextFormat = format;
-            field.x = Number(holder._listItem.vehicleIcon.x) +
-                      (cfg.hasOwnProperty("x") ? Number(cfg.x) : 0);
-            field.y = Number(holder._listItem.vehicleIcon.y) +
-                      (cfg.hasOwnProperty("y") ? Number(cfg.y) : 0);
-
-            // Exact placement in the original ABC: one layer after vehicleTF.
-            item.addChildAt(field, item.getChildIndex(holder._listItem.vehicleTF) + 1);
-            textFields[linkage][String(data["vehicleID"])] = field;
+            if (item == null || holder._listItem.vehicleIcon == null)
+               return enemy;
+            if (row.parent != item)
+            {
+               if (row.parent != null)
+                  row.parent.removeChild(row);
+               item.addChild(row);
+            }
+            var icon:DisplayObject = holder._listItem.vehicleIcon as DisplayObject;
+            row.x = Math.round(icon.x + (enemy ? -176 : 85));
+            row.y = Math.round(icon.y + 2);
+            return enemy;
          }
-         catch (error:Error)
+         catch (e:Error)
          {
-            trace("[inq_hpold] PlayerPanelsUI._createTextField: " + error.message);
+            trace("[inq_hpold] placeRow " + vehicleID + ": " + e.message);
+            return false;
+         }
+      }
+
+      private function relayout(event:Event):void
+      {
+         for (var id:* in _rows)
+         {
+            var row:Sprite = _rows[id] as Sprite;
+            if (row != null)
+               placeRow(int(id), row);
          }
       }
 
       override protected function onDispose():void
       {
-         for (var linkage:String in textFields)
-            as_delete(linkage);
+         removeEventListener(Event.ENTER_FRAME, relayout);
+         as_delete("hp_row");
          super.onDispose();
       }
    }
