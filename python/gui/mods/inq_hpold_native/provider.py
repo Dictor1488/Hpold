@@ -3,7 +3,7 @@ import BigWorld
 import Keys
 from Avatar import PlayerAvatar
 try:
-    from gui.Scaleform.daapi.view.battle.shared.players_panel import PlayersPanel
+    from gui.Scaleform.daapi.view.battle.classic.players_panel import PlayersPanel
 except ImportError:
     PlayersPanel = None
 from helpers import dependency
