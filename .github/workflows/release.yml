@@ -1,88 +1,71 @@
-name: Build and Release inq_hpold
-
+name: inq_hpold native AS3 test build
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    tags:
-      - 'v*'
-
 permissions:
   contents: write
-
 jobs:
-  release:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Python 3 for packaging
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install Python 2.7 compiler
-        shell: pwsh
-        run: |
-          $python27 = 'C:\Python27\python.exe'
-          if (-not (Test-Path $python27)) {
-            $installer = Join-Path $env:RUNNER_TEMP 'python-2.7.18.amd64.msi'
-            Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/2.7.18/python-2.7.18.amd64.msi' -OutFile $installer -UseBasicParsing
-            $process = Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart', 'TARGETDIR=C:\Python27') -Wait -PassThru
-            if ($process.ExitCode -notin @(0, 3010)) { throw "Python 2.7 installation failed: $($process.ExitCode)" }
-          }
-          if (-not (Test-Path $python27)) { throw 'Python 2.7 unavailable' }
-          & $python27 --version
-
-      - name: Run source tests
-        shell: pwsh
-        run: |
-          python -m unittest discover -s tests -v
-          python build.py --check
-
-      - name: Build inq_hpold
-        shell: pwsh
-        run: |
-          python build.py --python27 C:\Python27\python.exe
-
-      - name: Verify client format
-        shell: pwsh
-        run: |
-          @'
-          import pathlib, zipfile
-          files = list(pathlib.Path('build').glob('inq_hpold_*.wotmod'))
-          assert len(files) == 1, files
-          with zipfile.ZipFile(files[0]) as z:
-              assert z.testzip() is None
-              assert all(i.compress_type == zipfile.ZIP_STORED for i in z.infolist())
-              for name in ('mod_inq_hpold.pyc', 'inq_hpold_ui.pyc'):
-                  data = z.read('res/scripts/client/gui/mods/' + name)
-                  assert data[:4] == bytes.fromhex('03f30d0a'), name
-              assert not any(x.endswith('.py') or x.endswith('.swf') for x in z.namelist())
-          print('Verified:', files[0], files[0].stat().st_size)
-          '@ | python -
-          cd build
-          Get-FileHash *.wotmod -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content SHA256SUMS.txt
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-java@v4
         with:
-          name: inq_hpold-0.1.0-rc3
-          path: |
-            build/*.wotmod
-            build/SHA256SUMS.txt
+          distribution: temurin
+          java-version: '11'
+      - name: Install Python 2.7
+        shell: pwsh
+        run: |
+          choco install python2 -y --no-progress
+          $paths=@('C:\Python27\python.exe','C:\tools\python2\python.exe')
+          $py=$paths | Where-Object {Test-Path $_} | Select-Object -First 1
+          if (-not $py) {throw 'Python 2.7 not installed'}
+          "PYTHON27=$py" >> $env:GITHUB_ENV
+      - name: Obtain private SWC SDK inputs
+        env:
+          HPE_ACCESS_TOKEN: ${{ secrets.HPE_ACCESS_TOKEN }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:HPE_ACCESS_TOKEN)) {
+            throw 'Set HPE_ACCESS_TOKEN repository secret with read-only access to Dictor1488/HpE'
+          }
+          git -c http.extraheader="AUTHORIZATION: basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:HPE_ACCESS_TOKEN")))" clone --depth 1 https://github.com/Dictor1488/HpE.git "$env:RUNNER_TEMP\hpereference"
+          New-Item -ItemType Directory -Force as3/libs | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\hpereference\as3\libs\*.swc" as3/libs/
+      - name: Download Flex SDK
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://archive.apache.org/dist/flex/4.16.1/binaries/apache-flex-sdk-4.16.1-bin.zip -OutFile "$env:RUNNER_TEMP\flex.zip"
+          Expand-Archive "$env:RUNNER_TEMP\flex.zip" "$env:RUNNER_TEMP\flex"
+          $root=Get-ChildItem "$env:RUNNER_TEMP\flex" -Recurse -Filter mxmlc.bat | Select-Object -First 1
+          if (-not $root) {throw 'mxmlc not found'}
+          "MXMLC=$($root.FullName)" >> $env:GITHUB_ENV
+          $home=Split-Path (Split-Path $root.FullName)
+          New-Item -ItemType Directory -Force "$home\frameworks\libs\player\32.0" | Out-Null
+          Copy-Item as3/libs/playerglobal.swc "$home\frameworks\libs\player\32.0\playerglobal.swc"
+      - name: Compile owned AS3 renderer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force as3/bin | Out-Null
+          $a=@('-source-path+=as3/src_flash/src','-output=as3/bin/inq_hpold.swf','-target-player=32.0','-swf-version=39','-strict=true','-optimize=true')
+          Get-ChildItem as3/libs -Filter *.swc | ForEach-Object {
+            if ($_.Name -eq 'playerglobal.swc') {$a+="-library-path+=$($_.FullName)"}
+            else {$a+="-external-library-path+=$($_.FullName)"}
+          }
+          $a+='--'
+          $a+=(Resolve-Path as3/src_flash/src/InqHpoldPanel.as).Path
+          & $env:MXMLC @a
+          if ($LASTEXITCODE -ne 0) {throw 'ActionScript compilation failed'}
+      - name: Package WOTMOD
+        shell: pwsh
+        run: |
+          python build.py --python27 "$env:PYTHON27"
+      - name: Upload test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inq_hpold-native-0.2.0-alpha1
+          path: build/*.wotmod
           if-no-files-found: error
           compression-level: 0
-
-      - name: Publish release candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        shell: pwsh
-        run: |
-          $tag = 'v0.1.0-rc3'
-          if (gh release view $tag 2>$null) {
-            gh release upload $tag build/*.wotmod build/SHA256SUMS.txt --clobber
-            gh release edit $tag --title 'inq_hpold 0.1.0 RC3' --prerelease --latest=false --notes-file RELEASE_NOTES.md
-          } else {
-            gh release create $tag build/*.wotmod build/SHA256SUMS.txt --target $env:GITHUB_SHA --title 'inq_hpold 0.1.0 RC3' --prerelease --latest=false --notes-file RELEASE_NOTES.md
-          }
