@@ -44,6 +44,8 @@ package inq.hpold.battle
          _text.selectable = false;
          _text.mouseEnabled = false;
          _text.width = 72;
+         // OldSkool label anchor is 15px after the left bitmap and 16px
+         // after the right bitmap (original x=100/85, -160/-176).
          _text.x = 15;
          _text.y = 3;
          _text.height = TOTAL_HEIGHT;
@@ -121,6 +123,7 @@ package inq.hpold.battle
          _fill.y = 3;
          _background.visible = _showBar;
          _fill.visible = _showBar && _current > 0;
+         _text.x = _enemy ? 16 : 15;
          _text.text = (_maximum > 0 && _current > 0)
             ? String(_current) + "/" + String(_maximum) : "";
       }
