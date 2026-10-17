@@ -1,26 +1,27 @@
-"""Packaging tests for inq_hpold."""
+"""Gameface package smoke tests."""
 import unittest
 from pathlib import Path
-from unittest import mock
 import tempfile
+import zipfile
 import build
 
 
 class BuildTests(unittest.TestCase):
-    def test_missing_ui_fails_cleanly(self):
-        with mock.patch.object(build, 'UI_ASSET', Path('/not-a-file/inq_hpold.swf')):
-            with self.assertRaises(FileNotFoundError):
-                build.content()
+    def test_all_gameface_assets_packaged(self):
+        entries = build.content()
+        self.assertIn(build.RESOURCE, entries)
+        for name in build.GF_FILES:
+            self.assertIn('res/gui/gameface/mods/inq_hpold/panel/' + name, entries)
+        self.assertNotIn('res/gui/flash/inq_hpold.swf', entries)
 
-    def test_deterministic_build_with_valid_ui(self):
+    def test_deterministic_build(self):
         with tempfile.TemporaryDirectory() as folder:
-            asset = Path(folder) / 'inq_hpold.swf'
-            asset.write_bytes(b'CWS' + b'\0' * 30)
-            with mock.patch.object(build, 'UI_ASSET', asset):
-                first = Path(folder) / 'one.wotmod'
-                second = Path(folder) / 'two.wotmod'
-                self.assertEqual(build.create_wotmod(first), build.create_wotmod(second))
-                self.assertEqual(first.read_bytes(), second.read_bytes())
+            first = Path(folder) / 'one.wotmod'
+            second = Path(folder) / 'two.wotmod'
+            self.assertEqual(build.create_wotmod(first), build.create_wotmod(second))
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with zipfile.ZipFile(first) as archive:
+                self.assertIsNone(archive.testzip())
 
 
 if __name__ == '__main__':
