@@ -3,7 +3,7 @@
 
 Uses native PlayersPanel.updateVehicleHealth (not arena polling) and original
 HP templates. No imports of gui.legacy/external modules.
-This module still needs a working inq_hpold UI adapter for visible output.
+Gameface UI integration uses the bundled inq_hpold overlay.
 Python 2.7 / WoT client; client 2.4.1 integration is pending battle testing.
 """
 import json
@@ -173,6 +173,7 @@ class HPController(object):
                                             'barWidth': width}
                 payload['HPbars_' + field_name] = text
             self.bridge.update_vehicle(vehicleID, side, payload)
+            self.bridge.update_hp(vehicleID, current, maximum, self.displayed, self.enemy_image == 'hp_alive_cb.png')
         except Exception:
             log('render error: %s' % traceback.format_exc())
 
