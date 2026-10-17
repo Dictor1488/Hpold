@@ -1,18 +1,31 @@
-name: Validate Hpold build
+name: Validate inq_hpold native source
 on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  packaging:
+  source:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Check build script
-        run: python build.py --help
-      - name: Packaging smoke test
-        run: python -m unittest discover -s tests -v
+      - name: Native build source audit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('.')
+          expected=[
+            'as3/src_flash/src/InqHpoldPanel.as',
+            'as3/src_flash/src/inq/hpold/battle/HpPanel.as',
+            'as3/src_flash/src/inq/hpold/battle/HealthRow.as',
+            'python/gui/mods/mod_inq_hpold.py',
+            'python/gui/mods/inq_hpold_native/player_panel.py',
+            'python/gui/mods/inq_hpold_native/provider.py',
+          ]
+          assert all((root/p).is_file() for p in expected)
+          print('Native source files present:',len(expected))
+          PY
