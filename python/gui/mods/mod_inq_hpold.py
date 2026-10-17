@@ -73,7 +73,6 @@ class Events(object):
         self._data = {}
         self._visible = False
         self._showBars = True
-        self._enemyHpRed = False
 
     def _populate(self, component):
         self.componentUI = component
@@ -108,17 +107,15 @@ class Events(object):
             'current': current,
             'maximum': maximum,
             'visible': bool(self._visible),
-            'showBar': bool(self._showBars),
-            'enemyHpRed': bool(self._enemyHpRed)
+            'showBar': bool(self._showBars)
         })
 
     def setVisibility(self, visible):
         self._visible = bool(visible)
         self.refreshAll()
 
-    def setDisplaySettings(self, showHpBars, enemyHpRed):
+    def setDisplaySettings(self, showHpBars):
         self._showBars = bool(showHpBars)
-        self._enemyHpRed = bool(enemyHpRed)
         self.refreshAll()
 
     def refreshAll(self):
@@ -193,7 +190,7 @@ def finalize_panel():
 # Optional in-game settings (no external dependency required)
 # ---------------------------------------------------------------------------
 MOD_LINKAGE = 'inq_hpold'
-DEFAULTS = {'enabled': True, 'showHpBars': True, 'enemyHpRed': False}
+DEFAULTS = {'enabled': True, 'showHpBars': True}
 
 
 class inq_hpoldSettings(object):
@@ -211,9 +208,7 @@ class inq_hpoldSettings(object):
             'enabled': True,
             'column1': [
                 {'type': 'CheckBox', 'text': u'Показувати HP-шкали',
-                 'value': True, 'varName': 'showHpBars'},
-                {'type': 'CheckBox', 'text': u'Червоний HP противників',
-                 'value': False, 'varName': 'enemyHpRed'}
+                 'value': True, 'varName': 'showHpBars'}
             ],
             'column2': []
         }
@@ -270,8 +265,7 @@ class inq_hpoldSettings(object):
         return bool(self.values.get('enabled', True))
 
     def displaySettings(self):
-        return (bool(self.values.get('showHpBars', True)),
-                bool(self.values.get('enemyHpRed', False)))
+        return (bool(self.values.get('showHpBars', True)),)
 
 
 g_settings = inq_hpoldSettings()

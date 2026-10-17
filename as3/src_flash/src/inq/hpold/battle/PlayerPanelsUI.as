@@ -69,7 +69,7 @@ package inq.hpold.battle
          var fillMask:Shape = row.getChildByName("fillMask") as Shape;
          var label:TextField = row.getChildByName("hpLabel") as TextField;
          var enemy:Boolean = placeRow(id, row);
-         selectFill(fillLayer, enemy);
+         selectFill(fillLayer, enemy, isColorBlindMode());
          fillLayer.visible = Boolean(data.showBar) && ratio > 0;
          fillMask.graphics.clear();
          fillMask.graphics.beginFill(0xFFFFFF);
@@ -138,14 +138,27 @@ package inq.hpold.battle
          return bitmap;
       }
 
-      private function selectFill(layer:Sprite, enemy:Boolean):void
+      private function selectFill(layer:Sprite, enemy:Boolean, colorBlind:Boolean):void
       {
          var ally:DisplayObject = layer.getChildByName("ally");
          var red:DisplayObject = layer.getChildByName("enemy");
          var colorblind:DisplayObject = layer.getChildByName("colorblind");
          ally.visible = !enemy;
-         red.visible = enemy;
-         colorblind.visible = false;
+         red.visible = enemy && !colorBlind;
+         colorblind.visible = enemy && colorBlind;
+      }
+
+      private function isColorBlindMode():Boolean
+      {
+         try
+         {
+            return App != null && App.colorSchemeMgr != null &&
+                   Boolean(App.colorSchemeMgr.getIsColorBlindS());
+         }
+         catch (e:Error)
+         {
+            return false;
+         }
       }
 
       private function placeRow(vehicleID:int, row:Sprite):Boolean
@@ -182,6 +195,9 @@ package inq.hpold.battle
             row.x = Math.round(icon.x + (enemy ? -176 : 85));
             row.y = Math.round(icon.y + 2);
             row.visible = Boolean(_wanted[vehicleID]);
+            var fillLayer:Sprite = row.getChildByName("fillLayer") as Sprite;
+            if (fillLayer != null)
+               selectFill(fillLayer, enemy, isColorBlindMode());
             return enemy;
          }
          catch (e:Error)

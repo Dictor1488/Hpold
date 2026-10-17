@@ -8,7 +8,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent
-VERSION = os.environ.get('PROJECT_VERSION', '0.2.0-alpha3')
+VERSION = os.environ.get('PROJECT_VERSION', '0.2.0')
 ASSETS = (
     'res/gui/hpbars/hp_bg.png',
     'res/gui/hpbars/hp_alive_l.png',
