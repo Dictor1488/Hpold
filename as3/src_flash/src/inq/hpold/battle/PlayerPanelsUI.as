@@ -24,6 +24,7 @@ package inq.hpold.battle
       private var _wanted:Dictionary = new Dictionary();
       private var _fillWidths:Dictionary = new Dictionary();
       private var _showBars:Dictionary = new Dictionary();
+      private var _fillSignatures:Dictionary = new Dictionary();
       private var _lastLayout:int = 0;
 
       public function PlayerPanelsUI()
@@ -62,7 +63,6 @@ package inq.hpold.battle
                           current + "/" + maximum + "</font>";
 
          var enemy:Boolean = placeRow(id, row);
-         updateFill(row, enemy, int(_fillWidths[id]), Boolean(_showBars[id]));
          row.visible = Boolean(_wanted[id]);
       }
 
@@ -79,6 +79,7 @@ package inq.hpold.battle
             delete _wanted[id];
             delete _fillWidths[id];
             delete _showBars[id];
+            delete _fillSignatures[row];
          }
       }
 
@@ -120,16 +121,21 @@ package inq.hpold.battle
       private function updateFill(row:Sprite, enemy:Boolean, width:int, showBar:Boolean):void
       {
          var fill:TextField = row.getChildByName("fill") as TextField;
-         fill.visible = showBar && width > 0;
-         if (!fill.visible)
+         var show:Boolean = showBar && width > 0;
+         // Never reparse HTML images unless their actual appearance changes.
+         var asset:String = "hp_alive_l.png";
+         if (enemy)
+            asset = isColorBlindMode() ? "hp_alive_cb.png" : "hp_alive_r.png";
+         var signature:String = show ? asset + ":" + width : "hidden";
+         if (_fillSignatures[row] == signature)
+            return;
+         _fillSignatures[row] = signature;
+         fill.visible = show;
+         if (!show)
          {
             fill.htmlText = "";
             return;
          }
-
-         var asset:String = "hp_alive_l.png";
-         if (enemy)
-            asset = isColorBlindMode() ? "hp_alive_cb.png" : "hp_alive_r.png";
          fill.htmlText = "<img src='img://gui/hpbars/" + asset +
                          "' width='" + width + "' height='" + BAR_HEIGHT + "'>";
       }
@@ -152,6 +158,11 @@ package inq.hpold.battle
       {
          try
          {
+            if (!Boolean(_wanted[vehicleID]))
+            {
+               row.visible = false;
+               return false;
+            }
             if (battlePage == null)
                return false;
             var panel:* = battlePage["playersPanel"];
@@ -212,7 +223,7 @@ package inq.hpold.battle
          for (var id:* in _rows)
          {
             var row:Sprite = _rows[id] as Sprite;
-            if (row != null)
+            if (row != null && Boolean(_wanted[id]))
                placeRow(int(id), row);
          }
       }
