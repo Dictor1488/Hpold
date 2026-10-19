@@ -568,11 +568,9 @@ class HealthProvider(object):
             except Exception:
                 return
         nextHealth = min(maxHealth, newHealth)
-        # Arena event values may lag behind the native panel callback.
-        # In a standard battle health cannot spontaneously increase.
+        # Healing is legitimate in Onslaught and other special modes.
+        # Accept authoritative changes in either direction; reject only duplicates.
         previousHealth = self._health.get(vehicleID)
-        if previousHealth is not None and nextHealth > previousHealth:
-            return
         if previousHealth == nextHealth:
             return
         self._health[vehicleID] = nextHealth
@@ -647,10 +645,8 @@ class HealthProvider(object):
                 return
             current = min(maximum, current)
             previous = (self._health.get(vehicleID), self._maxHealth.get(vehicleID))
-            # Ignore an out-of-order full-health callback after damage.
-            # A new battle resets the cache in start()/stop().
-            if (previous[0] is not None and current > previous[0]):
-                return
+            # The native panel also reports legitimate healing; never clamp HP
+            # to its historical minimum.
             self._health[vehicleID] = current
             self._maxHealth[vehicleID] = maximum
             if previous != (current, maximum):
