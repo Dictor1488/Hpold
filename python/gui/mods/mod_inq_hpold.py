@@ -24,11 +24,6 @@ try:
     from gui.Scaleform.daapi.view.battle.classic.players_panel import PlayersPanel
 except ImportError:
     PlayersPanel = None
-try:
-    from gui.modsSettingsApi import g_modsSettingsApi
-except ImportError:
-    g_modsSettingsApi = None
-
 logger = logging.getLogger('[inq_hpold]')
 __version__ = '0.2.0'
 __author__ = 'Dictor1488'
@@ -186,89 +181,7 @@ def finalize_panel():
     g_events.viewRequested = False
     g_events._data.clear()
 
-# ---------------------------------------------------------------------------
-# Optional in-game settings (no external dependency required)
-# ---------------------------------------------------------------------------
-MOD_LINKAGE = 'inq_hpold'
-DEFAULTS = {'enabled': True, 'showHpBars': True}
-
-
-class inq_hpoldSettings(object):
-    def __init__(self):
-        self.values = dict(DEFAULTS)
-        self._registered = False
-        self._uiHooked = False
-
-    def initialize(self):
-        self._hookUIReady()
-        if self._registered or g_modsSettingsApi is None:
-            return
-        template = {
-            'modDisplayName': u'inq_hpold',
-            'enabled': True,
-            'column1': [
-                {'type': 'CheckBox', 'text': u'Показувати HP-шкали',
-                 'value': True, 'varName': 'showHpBars'}
-            ],
-            'column2': []
-        }
-        try:
-            saved = g_modsSettingsApi.setModTemplate(
-                MOD_LINKAGE, template, self._onSettingsChanged)
-            if saved:
-                self._apply(saved)
-            self._registered = True
-        except Exception:
-            logger.exception('inq_hpold settings registration failed')
-
-    def _hookUIReady(self):
-        if self._uiHooked:
-            return
-        try:
-            g_events.onUIReady += self._applyDisplayToFlash
-            self._uiHooked = True
-        except Exception:
-            logger.exception('inq_hpold UI settings callback failed')
-
-    def finalize(self):
-        if self._uiHooked:
-            try:
-                        g_events.onUIReady -= self._applyDisplayToFlash
-            except Exception:
-                pass
-        self._uiHooked = False
-        self._registered = False
-
-    def _apply(self, values):
-        if values:
-            for key in DEFAULTS:
-                if key in values:
-                    self.values[key] = bool(values[key])
-
-    def _applyDisplayToFlash(self, *args):
-        try:
-            g_events.setDisplaySettings(*self.displaySettings())
-        except Exception:
-            logger.exception('inq_hpold display settings failed')
-
-    def _onSettingsChanged(self, linkage, newSettings):
-        if linkage != MOD_LINKAGE:
-            return
-        self._apply(newSettings)
-        self._applyDisplayToFlash()
-        try:
-            g_provider.applySettings()
-        except Exception:
-            logger.exception('inq_hpold applying settings failed')
-
-    def isEnabled(self):
-        return bool(self.values.get('enabled', True))
-
-    def displaySettings(self):
-        return (bool(self.values.get('showHpBars', True)),)
-
-
-g_settings = inq_hpoldSettings()
+# HP bars are always enabled; this mod has no settings menu.
 
 # ---------------------------------------------------------------------------
 # Event-driven HP provider and player-panel hooks
@@ -359,7 +272,6 @@ class HealthProvider(object):
 
     def _applyVisibility(self, force=False):
         visible = bool(
-            g_settings.isEnabled() and
             (self._alwaysShow or (self._altDown and not self._ctrlDown))
         )
         if not force and self._visible == visible:
@@ -402,7 +314,7 @@ class HealthProvider(object):
 
     def applySettings(self):
         try:
-            g_events.setDisplaySettings(*g_settings.displaySettings())
+            g_events.setDisplaySettings(True)
             self._applyVisibility(force=True)
             g_events.refreshAll()
         except Exception:
@@ -748,7 +660,6 @@ def init():
         return
     try:
         initialize_panel()
-        g_settings.initialize()
         install_hooks()
         _initialized = True
         logger.info('inq_hpold loaded v%s', __version__)
@@ -761,7 +672,6 @@ def fini():
         return
     try:
         remove_hooks()
-        g_settings.finalize()
         finalize_panel()
         _initialized = False
         logger.info('inq_hpold unloaded')
