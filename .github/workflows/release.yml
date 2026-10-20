@@ -51,17 +51,32 @@ jobs:
           $libs = @(Get-ChildItem as3/libs -Filter *.swc)
           if ($libs.Count -ne 9) { throw "Expected 9 SWCs; found $($libs.Count)" }
           Write-Host "Available SWCs: $($libs.Count)"
-      - name: Download Flex SDK
+      - name: Restore cached Flex SDK
+        id: flex-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/apache-flex-4.16.1
+          key: flex-sdk-4.16.1-windows-v1
+
+      - name: Download Flex SDK (cache miss only)
+        if: steps.flex-cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          Invoke-WebRequest https://archive.apache.org/dist/flex/4.16.1/binaries/apache-flex-sdk-4.16.1-bin.zip -OutFile "$env:RUNNER_TEMP\flex.zip"
-          Expand-Archive "$env:RUNNER_TEMP\flex.zip" "$env:RUNNER_TEMP\flex"
-          $root=Get-ChildItem "$env:RUNNER_TEMP\flex" -Recurse -Filter mxmlc.bat | Select-Object -First 1
-          if (-not $root) {throw 'mxmlc not found'}
+          $flexRoot = Join-Path $env:RUNNER_TOOL_CACHE 'apache-flex-4.16.1'
+          New-Item -ItemType Directory -Force $flexRoot | Out-Null
+          Invoke-WebRequest https://archive.apache.org/dist/flex/4.16.1/binaries/apache-flex-sdk-4.16.1-bin.zip -OutFile "$env:RUNNER_TEMP\\flex.zip"
+          Expand-Archive "$env:RUNNER_TEMP\\flex.zip" $flexRoot
+
+      - name: Configure Flex SDK
+        shell: pwsh
+        run: |
+          $flexRoot = Join-Path $env:RUNNER_TOOL_CACHE 'apache-flex-4.16.1'
+          $root = Get-ChildItem $flexRoot -Recurse -Filter mxmlc.bat | Select-Object -First 1
+          if (-not $root) { throw 'mxmlc not found in cached Flex SDK' }
           "MXMLC=$($root.FullName)" >> $env:GITHUB_ENV
-          $flexHome=Split-Path (Split-Path $root.FullName)
-          New-Item -ItemType Directory -Force "$flexHome\frameworks\libs\player\32.0" | Out-Null
-          Copy-Item as3/libs/playerglobal.swc "$flexHome\frameworks\libs\player\32.0\playerglobal.swc"
+          $flexHome = Split-Path (Split-Path $root.FullName)
+          New-Item -ItemType Directory -Force "$flexHome\\frameworks\\libs\\player\\32.0" | Out-Null
+          Copy-Item as3/libs/playerglobal.swc "$flexHome\\frameworks\\libs\\player\\32.0\\playerglobal.swc" -Force
           $configPath = Join-Path $flexHome 'frameworks/flex-config.xml'
           $configText = Get-Content $configPath -Raw
           $playerRoot = (Join-Path $flexHome 'frameworks/libs/player').Replace('\\','/')
