@@ -212,6 +212,7 @@ class HealthProvider(object):
         self._maxHealth = {}
         self._session = 0
         self._subscribed = []
+        self._callback = None
 
         self._altDown = False
         self._ctrlDown = False
@@ -234,6 +235,12 @@ class HealthProvider(object):
     def stop(self, clear_session=True):
         if clear_session:
             self._session += 1
+        if self._callback is not None:
+            try:
+                BigWorld.cancelCallback(self._callback)
+            except Exception:
+                pass
+            self._callback = None
         self._unsubscribeArena()
         self._arena = None
         self._health.clear()
@@ -336,6 +343,7 @@ class HealthProvider(object):
             self._subscribeArena()
             self._pushAll()
             self._applyVisibility(force=True)
+            self._schedulePoll(session)
             logger.info('inq_hpold provider started for %s vehicles', len(self._maxHealth))
         except Exception:
             logger.exception('inq_hpold provider start failed')
@@ -463,6 +471,36 @@ class HealthProvider(object):
 
     def _classForVehicle(self, vehicleID):
         return ''
+
+    def _schedulePoll(self, session):
+        # Same 0.35s reconciliation mechanism as the tested HpE provider.
+        if session != self._session or self._arena is None:
+            return
+        try:
+            self._callback = BigWorld.callback(0.35, lambda: self._poll(session))
+        except Exception:
+            self._callback = None
+            logger.exception('inq_hpold HP poll scheduling failed')
+
+    def _poll(self, session):
+        self._callback = None
+        if session != self._session or self._arena is None:
+            return
+        try:
+            changed = False
+            for vehicleID, maxHealth in tuple(self._maxHealth.items()):
+                value = self._readCurrentHealth(vehicleID, self._health.get(vehicleID, maxHealth))
+                value = min(maxHealth, value)
+                if self._health.get(vehicleID) != value:
+                    self._health[vehicleID] = value
+                    g_events.setVehicleHealth(vehicleID, value, maxHealth,
+                                              self._classForVehicle(vehicleID))
+                    changed = True
+            if changed:
+                g_events.refreshAll()
+        except Exception:
+            logger.exception('inq_hpold HP poll failed')
+        self._schedulePoll(session)
 
     def _onVehicleHealthChanged(self, *args):
         if len(args) < 2:
