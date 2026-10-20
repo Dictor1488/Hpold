@@ -24,6 +24,8 @@ package inq.hpold.battle
       private var _wanted:Dictionary = new Dictionary();
       private var _fillWidths:Dictionary = new Dictionary();
       private var _showBars:Dictionary = new Dictionary();
+      private var _fillCache:Dictionary = new Dictionary();
+      private var _textCache:Dictionary = new Dictionary();
       private var _lastLayout:int = 0;
 
       public function PlayerPanelsUI()
@@ -58,12 +60,18 @@ package inq.hpold.battle
          _wanted[id] = Boolean(data.visible) && Number(data.maximum) > 0 && current > 0;
 
          var label:TextField = row.getChildByName("hpLabel") as TextField;
-         label.htmlText = "<font face='$FieldFont' color='#FFFFFF' size='11'>" +
-                          current + "/" + maximum + "</font>";
+         var value:String = current + "/" + maximum;
+         if (_textCache[id] != value)
+         {
+            label.htmlText = "<font face='$FieldFont' color='#FFFFFF' size='11'>" +
+                             value + "</font>";
+            _textCache[id] = value;
+         }
 
-         var enemy:Boolean = placeRow(id, row);
-         updateFill(row, enemy, int(_fillWidths[id]), Boolean(_showBars[id]));
-         row.visible = Boolean(_wanted[id]);
+         if (Boolean(_wanted[id]))
+            placeRow(id, row);
+         else
+            row.visible = false;
       }
 
       public function as_delete(linkage:String):void
@@ -79,6 +87,8 @@ package inq.hpold.battle
             delete _wanted[id];
             delete _fillWidths[id];
             delete _showBars[id];
+            delete _fillCache[row];
+            delete _textCache[id];
          }
       }
 
@@ -120,18 +130,17 @@ package inq.hpold.battle
       private function updateFill(row:Sprite, enemy:Boolean, width:int, showBar:Boolean):void
       {
          var fill:TextField = row.getChildByName("fill") as TextField;
-         fill.visible = showBar && width > 0;
-         if (!fill.visible)
-         {
-            fill.htmlText = "";
-            return;
-         }
-
+         var showing:Boolean = showBar && width > 0;
+         fill.visible = showing;
          var asset:String = "hp_alive_l.png";
          if (enemy)
             asset = isColorBlindMode() ? "hp_alive_cb.png" : "hp_alive_r.png";
-         fill.htmlText = "<img src='img://gui/hpbars/" + asset +
-                         "' width='" + width + "' height='" + BAR_HEIGHT + "'>";
+         var key:String = showing ? asset + ':' + width : 'hidden';
+         if (_fillCache[row] == key)
+            return;
+         _fillCache[row] = key;
+         fill.htmlText = showing ? "<img src='img://gui/hpbars/" + asset +
+                         "' width='" + width + "' height='" + BAR_HEIGHT + "'>" : "";
       }
 
       private function isColorBlindMode():Boolean
@@ -152,6 +161,11 @@ package inq.hpold.battle
       {
          try
          {
+            if (!Boolean(_wanted[vehicleID]))
+            {
+               row.visible = false;
+               return false;
+            }
             if (battlePage == null)
                return false;
             var panel:* = battlePage["playersPanel"];
@@ -212,7 +226,7 @@ package inq.hpold.battle
          for (var id:* in _rows)
          {
             var row:Sprite = _rows[id] as Sprite;
-            if (row != null)
+            if (row != null && Boolean(_wanted[id]))
                placeRow(int(id), row);
          }
       }
