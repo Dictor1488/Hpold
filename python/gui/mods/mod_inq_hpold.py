@@ -211,6 +211,9 @@ class HealthProvider(object):
         self._maxHealth = {}
         self._session = 0
         self._subscribed = []
+        self._pollInterval = 0.5
+        self._healthEventCount = 0
+        self._panelEventCount = 0
 
         self._altDown = False
         self._ctrlDown = False
@@ -235,6 +238,9 @@ class HealthProvider(object):
             self._session += 1
         self._unsubscribeArena()
         self._arena = None
+        logger.info('inq_hpold battle summary: health events=%s panel events=%s', self._healthEventCount, self._panelEventCount)
+        self._healthEventCount = 0
+        self._panelEventCount = 0
         self._health.clear()
         self._maxHealth.clear()
         self._resetHotkeys()
@@ -333,9 +339,12 @@ class HealthProvider(object):
             self._arena = arena
             self._buildInitialState()
             self._subscribeArena()
+            self._schedulePoll(session)
             self._pushAll()
             self._applyVisibility(force=True)
-            logger.info('inq_hpold provider started for %s vehicles', len(self._maxHealth))
+            logger.info('inq_hpold provider started for %s vehicles; arena events=%s; panel hook=%s',
+                        len(self._maxHealth), [name for name, unused in self._subscribed],
+                        bool(_origPanelHealth))
         except Exception:
             logger.exception('inq_hpold provider start failed')
 
@@ -379,14 +388,86 @@ class HealthProvider(object):
                 pass
         return 0
 
-    def _readCurrentHealth(self, vehicleID, defaultValue):
+    def _isDead(self, vehicleID):
+        """Use explicit battle state, never infer a death from a missing entity."""
         try:
-            entity = BigWorld.entity(int(vehicleID))
-            value = getattr(entity, 'health', None) if entity is not None else None
-            if value is not None:
-                return max(0, int(value))
+            data = self._arena.vehicles.get(int(vehicleID), {})
+            if data.get('isAlive') is False:
+                return True
         except Exception:
             pass
+        arenaDP = self._getArenaDP()
+        if arenaDP is not None:
+            for methodName in ('getVehicleStats', 'getVehicleStatsVO'):
+                try:
+                    method = getattr(arenaDP, methodName, None)
+                    if not callable(method):
+                        continue
+                    stats = method(int(vehicleID))
+                    alive = stats.get('isAlive') if isinstance(stats, dict) else getattr(stats, 'isAlive', None)
+                    if alive is False:
+                        return True
+                except Exception:
+                    pass
+        return False
+
+    def _readObservedHealth(self, vehicleID):
+        """Return only current HP from a live entity or battle statistics.
+        Never fall back to arena.vehicles['health'] (spawn HP).
+        """
+        if self._isDead(vehicleID):
+            return 0
+        try:
+            entity = BigWorld.entity(int(vehicleID))
+            hp = getattr(entity, 'health', None) if entity is not None else None
+            if hp is not None:
+                return max(0, int(hp))
+        except Exception:
+            pass
+        arenaDP = self._getArenaDP()
+        if arenaDP is not None:
+            for methodName in ('getVehicleStats', 'getVehicleStatsVO'):
+                try:
+                    method = getattr(arenaDP, methodName, None)
+                    if not callable(method):
+                        continue
+                    stats = method(int(vehicleID))
+                    if stats is None:
+                        continue
+                    hp = stats.get('health') if isinstance(stats, dict) else getattr(stats, 'health', None)
+                    if hp is not None:
+                        return max(0, int(hp))
+                except Exception:
+                    pass
+        return None
+
+    def _schedulePoll(self, session):
+        # A cheap fallback for replays and game versions without arena HP events.
+        if session != self._session or self._arena is None:
+            return
+        BigWorld.callback(self._pollInterval, lambda: self._pollHealth(session))
+
+    def _pollHealth(self, session):
+        if session != self._session or self._arena is None:
+            return
+        try:
+            for vehicleID, maximum in tuple(self._maxHealth.items()):
+                observed = self._readObservedHealth(vehicleID)
+                if observed is None:
+                    continue
+                current = min(maximum, observed)
+                if self._health.get(vehicleID) != current:
+                    self._health[vehicleID] = current
+                    g_events.setVehicleHealth(vehicleID, current, maximum)
+            self._schedulePoll(session)
+        except Exception:
+            logger.exception('inq_hpold health reconciliation failed')
+            self._schedulePoll(session)
+
+    def _readCurrentHealth(self, vehicleID, defaultValue):
+        observed = self._readObservedHealth(vehicleID)
+        if observed is not None:
+            return observed
 
         arenaDP = self._getArenaDP()
         if arenaDP is not None:
@@ -409,6 +490,8 @@ class HealthProvider(object):
 
         try:
             vehicleData = self._arena.vehicles.get(int(vehicleID), {})
+            if vehicleData.get('isAlive') is False:
+                return 0
             value = vehicleData.get('health')
             if value is not None:
                 return max(0, int(value))
@@ -479,7 +562,8 @@ class HealthProvider(object):
                 self._maxHealth[vehicleID] = maxHealth
             except Exception:
                 return
-        nextHealth = min(maxHealth, newHealth)
+        self._healthEventCount += 1
+        nextHealth = 0 if self._isDead(vehicleID) else min(maxHealth, newHealth)
         # Healing is legitimate in Onslaught and other special modes.
         # Accept authoritative changes in either direction; reject only duplicates.
         previousHealth = self._health.get(vehicleID)
@@ -555,7 +639,8 @@ class HealthProvider(object):
             current = max(0, int(newHealth))
             if maximum <= 0:
                 return
-            current = min(maximum, current)
+            self._panelEventCount += 1
+            current = 0 if self._isDead(vehicleID) else min(maximum, current)
             previous = (self._health.get(vehicleID), self._maxHealth.get(vehicleID))
             # The native panel also reports legitimate healing; never clamp HP
             # to its historical minimum.
