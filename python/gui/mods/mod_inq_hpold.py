@@ -210,6 +210,7 @@ class HealthProvider(object):
         self._arena = None
         self._health = {}
         self._maxHealth = {}
+        self._dead = set()
         self._session = 0
         self._subscribed = []
         self._callback = None
@@ -245,6 +246,7 @@ class HealthProvider(object):
         self._arena = None
         self._health.clear()
         self._maxHealth.clear()
+        self._dead.clear()
         self._resetHotkeys()
         self._visible = None
         try:
@@ -388,6 +390,57 @@ class HealthProvider(object):
                 pass
         return 0
 
+    def _isVehicleAlive(self, vehicleID):
+        """Use WG battle vehicle status; missing entities do not mean dead."""
+        try:
+            arenaDP = self._getArenaDP()
+            if arenaDP is not None:
+                info = arenaDP.getVehicleInfo(int(vehicleID))
+                if info is not None:
+                    return bool(info.isAlive())
+        except Exception:
+            pass
+        try:
+            data = self._arena.vehicles.get(int(vehicleID), {})
+            if data.get('isAlive') is False:
+                return False
+        except Exception:
+            pass
+        return None
+
+    def _setHealth(self, vehicleID, current, maximum=None, source='event'):
+        vehicleID = int(vehicleID)
+        if maximum is None:
+            maximum = self._maxHealth.get(vehicleID, 0)
+        maximum = int(maximum or 0)
+        if maximum <= 0:
+            return
+        alive = self._isVehicleAlive(vehicleID)
+        if alive is False:
+            self._dead.add(vehicleID)
+        if vehicleID in self._dead:
+            current = 0
+        current = min(maximum, max(0, int(current)))
+        old = (self._health.get(vehicleID), self._maxHealth.get(vehicleID))
+        self._health[vehicleID] = current
+        self._maxHealth[vehicleID] = maximum
+        if old != (current, maximum):
+            g_events.setVehicleHealth(vehicleID, current, maximum,
+                                      self._classForVehicle(vehicleID))
+
+    def _readObservedHealth(self, vehicleID):
+        """Only authoritative current values; never read spawn HP as live HP."""
+        if vehicleID in self._dead or self._isVehicleAlive(vehicleID) is False:
+            return 0
+        try:
+            entity = BigWorld.entity(int(vehicleID))
+            if entity is not None and getattr(entity, 'health', None) is not None:
+                return max(0, int(entity.health))
+        except Exception:
+            pass
+        # Unspotted enemies have no reliable live entity. Keep last feedback HP.
+        return None
+
     def _readCurrentHealth(self, vehicleID, defaultValue):
         try:
             entity = BigWorld.entity(int(vehicleID))
@@ -428,14 +481,18 @@ class HealthProvider(object):
     def _buildInitialState(self):
         self._health.clear()
         self._maxHealth.clear()
+        self._dead.clear()
         for vehicleID, vehicleData in self._arena.vehicles.items():
             try:
                 vehicleID = int(vehicleID)
                 maxHealth = self._getMaxHealth(vehicleData)
                 if maxHealth <= 0:
                     continue
-                current = self._readCurrentHealth(vehicleID, maxHealth)
-                current = min(maxHealth, current)
+                alive = self._isVehicleAlive(vehicleID)
+                if alive is False:
+                    self._dead.add(vehicleID)
+                observed = self._readObservedHealth(vehicleID)
+                current = min(maxHealth, observed if observed is not None else maxHealth)
                 self._maxHealth[vehicleID] = maxHealth
                 self._health[vehicleID] = current
             except Exception:
@@ -456,7 +513,6 @@ class HealthProvider(object):
         self._unsubscribeArena()
         if self._arena is None:
             return
-        self._subscribe('onVehicleHealthChanged', self._onVehicleHealthChanged)
         self._subscribe('onVehicleKilled', self._onVehicleKilled)
         self._subscribe('onNewVehicleListReceived', self._onVehicleListChanged)
         self._subscribe('onVehicleAdded', self._onVehicleListChanged)
@@ -489,47 +545,15 @@ class HealthProvider(object):
         try:
             changed = False
             for vehicleID, maxHealth in tuple(self._maxHealth.items()):
-                value = self._readCurrentHealth(vehicleID, self._health.get(vehicleID, maxHealth))
-                value = min(maxHealth, value)
-                if self._health.get(vehicleID) != value:
-                    self._health[vehicleID] = value
-                    g_events.setVehicleHealth(vehicleID, value, maxHealth,
-                                              self._classForVehicle(vehicleID))
+                value = self._readObservedHealth(vehicleID)
+                if value is not None and self._health.get(vehicleID) != min(maxHealth, value):
+                    self._setHealth(vehicleID, value, maxHealth, 'entity')
                     changed = True
             if changed:
                 g_events.refreshAll()
         except Exception:
             logger.exception('inq_hpold HP poll failed')
         self._schedulePoll(session)
-
-    def _onVehicleHealthChanged(self, *args):
-        if len(args) < 2:
-            return
-        try:
-            vehicleID = int(args[0])
-            newHealth = max(0, int(args[1]))
-        except Exception:
-            return
-        maxHealth = self._maxHealth.get(vehicleID, 0)
-        if maxHealth <= 0:
-            try:
-                vehicleData = self._arena.vehicles.get(vehicleID, {})
-                maxHealth = self._getMaxHealth(vehicleData)
-                self._maxHealth[vehicleID] = maxHealth
-            except Exception:
-                return
-        nextHealth = min(maxHealth, newHealth)
-        # Healing is legitimate in Onslaught and other special modes.
-        previousHealth = self._health.get(vehicleID)
-        if previousHealth == nextHealth:
-            return
-        self._health[vehicleID] = nextHealth
-        g_events.setVehicleHealth(
-            vehicleID,
-            self._health[vehicleID],
-            maxHealth,
-            self._classForVehicle(vehicleID)
-        )
 
     def _onVehicleKilled(self, *args):
         if not args:
@@ -539,13 +563,8 @@ class HealthProvider(object):
         except Exception:
             return
         if vehicleID in self._maxHealth:
-            self._health[vehicleID] = 0
-            g_events.setVehicleHealth(
-                vehicleID,
-                0,
-                self._maxHealth[vehicleID],
-                self._classForVehicle(vehicleID)
-            )
+            self._dead.add(vehicleID)
+            self._setHealth(vehicleID, 0, source='killed')
 
     def _onVehicleListChanged(self, *args):
         # Arena vehicle-list notifications are not health snapshots. Rebuilding
@@ -561,9 +580,8 @@ class HealthProvider(object):
                 self._maxHealth[vehicleID] = maximum
                 self._health[vehicleID] = min(
                     maximum, self._readCurrentHealth(vehicleID, maximum))
-                g_events.setVehicleHealth(
-                    vehicleID, self._health[vehicleID], maximum,
-                    self._classForVehicle(vehicleID))
+                self._setHealth(vehicleID, self._health[vehicleID], maximum,
+                                'vehicle_added')
         except Exception:
             logger.exception('Vehicle list refresh failed')
 
@@ -594,13 +612,8 @@ class HealthProvider(object):
             if maximum <= 0:
                 return
             current = min(maximum, current)
-            previous = (self._health.get(vehicleID), self._maxHealth.get(vehicleID))
-            # Allow legitimate healing, not only damage.
-            self._health[vehicleID] = current
-            self._maxHealth[vehicleID] = maximum
-            if previous != (current, maximum):
-                g_events.setVehicleHealth(
-                    vehicleID, current, maximum, self._classForVehicle(vehicleID))
+            # Native WG panel carries absolute health, including healing.
+            self._setHealth(vehicleID, current, maximum, 'players_panel')
         except Exception:
             logger.exception('Could not process WoT PlayersPanel health update')
 
